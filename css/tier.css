@@ -68,3 +68,41 @@
 .note { font-size: .86em; color: var(--muted); line-height: 1.6; }
 .pill.warn { background: #3a2a12; color: var(--warn); }
 .pill.good { background: #123a2b; color: var(--good); }
+
+/* 로딩: 티어 엠블럼이 차례로 튀어오름 */
+.tier-loader svg { width: 34px; height: 34px; animation: bob 1.2s ease-in-out infinite; filter: drop-shadow(0 4px 8px rgba(0,0,0,.45)); }
+.tier-loader svg:nth-child(2) { animation-delay: .15s; } .tier-loader svg:nth-child(3) { animation-delay: .3s; } .tier-loader svg:nth-child(4) { animation-delay: .45s; }
+.cat-pick.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 760px) { .cat-pick.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* 한자 학습 */
+.hj-steps { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.hj-steps span { padding: .3em .8em; border-radius: 99px; background: #111a36; color: var(--muted); font-size: .85em; font-weight: 700; }
+.hj-steps span.on { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; }
+.hj-steps span.done { background: #143a2e; color: var(--good); }
+.hj-card { display: grid; grid-template-columns: 200px 1fr; gap: 20px; align-items: center; background: linear-gradient(160deg, #1a2447, #121a35); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }
+@media (max-width: 620px) { .hj-card { grid-template-columns: 1fr; justify-items: center; text-align: center; } }
+.hj-glyph { width: 200px; height: 200px; background: #f7f1e3; border-radius: 14px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;
+  background-image: linear-gradient(#e2d6bb 1px, transparent 1px), linear-gradient(90deg, #e2d6bb 1px, transparent 1px); background-size: 100px 100px; background-position: -1px -1px; }
+.hj-glyph .static { font-family: "Noto Serif KR", "Batang", "바탕", serif; font-size: 150px; color: #1d1d22; line-height: 1; }
+.hj-glyph svg { position: absolute; inset: 0; }
+.hj-info .hun { font-size: 2em; font-weight: 900; letter-spacing: -.02em; }
+.hj-info .words { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.hj-info .words span { background: #0f1630; border: 1px solid var(--line); border-radius: 10px; padding: .35em .7em; }
+.hj-info .words b { font-family: "Noto Serif KR", "Batang", serif; font-size: 1.15em; margin-right: 4px; }
+.hj-q { text-align: center; }
+.hj-q .prompt { font-size: 1.1em; color: var(--muted); margin-bottom: 8px; }
+.hj-q .big { font-family: "Noto Serif KR", "Batang", "바탕", serif; font-size: 5em; font-weight: 700; line-height: 1.1; margin: 6px 0 16px; }
+.hj-q .big.txt { font-family: inherit; font-size: 2.2em; }
+.hj-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-width: 560px; margin: 0 auto; }
+.hj-opts button { border: 2px solid var(--line); background: #10183a; border-radius: 14px; padding: 16px 10px; font-size: 1.25em; font-weight: 800; cursor: pointer; color: var(--text); }
+.hj-opts button.han { font-family: "Noto Serif KR", "Batang", serif; font-size: 2em; padding: 10px; }
+.hj-opts button.ok { border-color: var(--good); background: #143a2e; }
+.hj-opts button.no { border-color: var(--bad); background: #3a1b27; }
+.hj-progress { height: 8px; border-radius: 99px; background: #0e1530; overflow: hidden; margin: 10px 0 16px; }
+.hj-progress > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+.hj-chars { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+.hj-chars div { background: #111a36; border-radius: 10px; padding: 6px 4px; text-align: center; }
+.hj-chars div b { display: block; font-family: "Noto Serif KR", "Batang", serif; font-size: 1.6em; }
+.hj-chars div span { font-size: .72em; color: var(--muted); }
+.hj-chars div.locked { opacity: .25; }

@@ -7,7 +7,7 @@
   const MAX_STUDENTS = 25;
   let tab = 'board';
   let subs = [];
-  let acts = {}, ents = {}, secrets = {};
+  let acts = {}, ents = {}, secrets = {}, levels = {}, hanjaAll = {};
   let boardMonth = null, actMonth = null;
   const sel = new Set();
   const main = () => $('#tc-main');
@@ -17,6 +17,8 @@
       subs.push(B.on('activities', (v) => { acts = v || {}; A.render(); }));
       subs.push(B.on('entries', (v) => { ents = v || {}; A.render(); }));
       subs.push(B.on('secrets', (v) => { secrets = v || {}; if (tab === 'students') A.render(); }));
+      subs.push(B.on('levels', (v) => { levels = v || {}; if (tab === 'levels' || tab === 'approve') A.render(); }));
+      subs.push(B.on('hanja', (v) => { hanjaAll = v || {}; if (tab === 'levels') A.render(); }));
       main().dataset.tab = '';
       A.render();
     },
@@ -166,13 +168,13 @@
     $('#ap-cnt').textContent = `${list.length}건`;
     $('#ap-table').innerHTML = list.length ? `<table class="tbl"><thead><tr><th></th><th>제출</th><th>학생</th><th>항목</th><th>내용</th><th></th></tr></thead><tbody>
       ${list.map((e) => { const k = e.uid + '/' + e.id; return `<tr><td><input type="checkbox" class="chk" data-ck="${k}" ${sel.has(k) ? 'checked' : ''}></td><td>${fmtTime(e.ts)}${isClosed(e.month) ? ' <span class="pill warn">마감된 달</span>' : ''}</td><td>${nameTag(e.uid)}</td>
-        <td><b>${esc(st.cats[e.cat] ? st.cats[e.cat].name : e.cat)}</b></td><td>${esc(e.text)}</td>
+        <td><b>${esc(catLabel(e))}</b></td><td>${esc(e.text)}${e.cat === 'unit' && !acts[e.aid] ? ' <span class="pill warn">삭제된 단원평가</span>' : ''}</td>
         <td><div class="row-actions"><button class="btn xs good" data-one="ok" data-k="${k}">승인</button><button class="btn xs danger" data-one="no" data-k="${k}">반려</button></div></td></tr>`; }).join('')}
       </tbody></table>` : '<p class="empty" style="padding:30px">승인할 기록이 없어요 👍</p>';
     const done = [];
     for (const [uid, l] of Object.entries(ents)) for (const [id, e] of Object.entries(l || {})) if (e && e.by === 'student' && e.status !== 'pending' && e.reviewedAt) done.push(Object.assign({ id, uid }, e));
     done.sort((a, b) => b.reviewedAt - a.reviewedAt);
-    $('#ap-done').innerHTML = done.length ? `<ul class="rows">${done.slice(0, 15).map((e) => `<li><span class="status ${e.status}">${e.status === 'approved' ? '승인' : '반려'}</span>${nameTag(e.uid)}<span>${esc(st.cats[e.cat] ? st.cats[e.cat].name : e.cat)} · ${esc(e.text)}</span>
+    $('#ap-done').innerHTML = done.length ? `<ul class="rows">${done.slice(0, 15).map((e) => `<li><span class="status ${e.status}">${e.status === 'approved' ? '승인' : '반려'}</span>${nameTag(e.uid)}<span>${esc(catLabel(e))} · ${esc(e.text)}</span>
       <span class="right"><button class="btn xs ghost" data-undo="${e.uid}/${e.id}">되돌리기</button></span></li>`).join('')}</ul>` : '<p class="empty">아직 없어요</p>';
   };
   async function review(keys, ok) {
@@ -197,6 +199,11 @@
       upd[`entries/${uid}/${id}/status`] = ok ? 'approved' : 'rejected';
       upd[`entries/${uid}/${id}/reviewedAt`] = now;
       if (!ok && reason) upd[`entries/${uid}/${id}/reason`] = reason;
+      // 타자·리코더 승급 심사 승인 → 급수 올리기
+      if (ok && e.track && window.Tracks.TRACKS[e.track]) {
+        const cur = (levels[uid] && levels[uid][e.track]) || 0;
+        upd[`levels/${uid}/${e.track}`] = Math.max(cur, Number(e.level) || cur + 1);
+      }
       sel.delete(k);
       done++;
     }
@@ -213,13 +220,21 @@
       const [uid, id] = b.dataset.undo.split('/');
       const x = ents[uid] && ents[uid][id];
       if (x && isClosed(x.month)) return toast('마감된 달의 기록은 되돌릴 수 없어요.', 'bad');
-      await B.update(`entries/${uid}/${id}`, { status: 'pending', reviewedAt: null, reason: null });
+      const upd = { [`entries/${uid}/${id}/status`]: 'pending', [`entries/${uid}/${id}/reviewedAt`]: null, [`entries/${uid}/${id}/reason`]: null };
+      // 승인했던 승급을 되돌리면 급수도 한 단계 내림
+      if (x && x.status === 'approved' && x.track && levels[uid] && levels[uid][x.track] === Number(x.level)) upd[`levels/${uid}/${x.track}`] = Number(x.level) - 1;
+      await B.update('', upd);
     }
+  }
+  function catLabel(e) {
+    if (e.cat === 'unit') return '단원평가';
+    const c = A.settings().cats[e.cat];
+    return c ? c.name : e.cat;
   }
 
   /* ───────────── 경쟁 활동 ───────────── */
   SK.acts = () => {
-    main().innerHTML = `<div class="a-head"><h2>경쟁 활동</h2><span class="muted">수행평가·학급 대회 결과를 입력하면 반 안 상대평가로 점수가 오가요</span><span class="sp"></span>
+    main().innerHTML = `<div class="a-head"><h2>경쟁 활동</h2><span class="muted">수행평가·단원평가·학급 대회 결과로 점수가 오가요</span><span class="sp"></span>
       <div class="month-select"><select id="ac-month"></select></div><button class="btn primary" id="ac-new">+ 새 활동</button></div>
       <div class="tbl-wrap" id="ac-table"></div>`;
     $('#ac-month').onchange = (e) => { actMonth = e.target.value; RD.acts(); };
@@ -229,11 +244,17 @@
       if (!b) return;
       const id = b.dataset.id;
       if (b.dataset.a === 'edit') editActivity(id);
+      else if (b.dataset.a === 'toggle') {
+        const a = acts[id];
+        const open = !a.open;
+        await B.update('', { [`activities/${id}/open`]: open, ['openUnits/' + id]: open ? { name: a.name, at: a.at, month: a.month } : null });
+        toast(open ? '학생들이 다시 점수를 입력할 수 있어요.' : '제출을 마감했어요.', 'good');
+      }
       else if (b.dataset.a === 'del') {
         const a = acts[id];
         if (isClosed(a.month)) return toast('마감된 달의 활동은 지울 수 없어요.', 'bad');
         if (!(await confirmBox('활동 삭제', `「${esc(a.name)}」을 지울까요? 그달 점수가 다시 계산돼요.`, '삭제', true))) return;
-        await B.remove('activities/' + id);
+        await B.update('', { ['activities/' + id]: null, ['openUnits/' + id]: null });
       }
     };
   };
@@ -252,10 +273,16 @@
     $('#ac-table').innerHTML = list.length ? `<table class="tbl"><thead><tr><th>날짜</th><th>활동</th><th>종류</th><th>입력 방식</th><th>점수 규칙</th><th class="num">참가</th><th></th></tr></thead><tbody>
       ${list.map((a) => `<tr><td>${fmtDate(a.at)}</td><td><b>${esc(a.name)}</b></td><td>${esc(T.KIND_NAMES[a.kind] || '')}</td><td>${esc((T.MODE_NAMES[a.mode] || '').split(' ')[0])}</td>
         <td>${esc(rule(a))}</td>
-        <td class="num">${Object.values(a.results || {}).filter((v) => v !== '' && v !== null).length}명</td>
+        <td class="num">${a.studentInput ? unitSummary(a.id, a) : `${Object.values(a.results || {}).filter((v) => v !== '' && v !== null).length}명`}</td>
         <td><div class="row-actions"><button class="btn xs" data-a="edit" data-id="${a.id}">${closed ? '보기' : '수정'}</button>${closed ? '' : `<button class="btn xs danger" data-a="del" data-id="${a.id}">삭제</button>`}</div></td></tr>`).join('')}
       </tbody></table>` : `<p class="empty" style="padding:30px">${esc(T.monthLabel(actMonth))}에 입력한 활동이 없어요.</p>`;
   };
+  // 학생 입력 단원평가: 제출·확인 현황과 제출 마감/다시 열기
+  function unitSummary(aid, a) {
+    let pend = 0, ok = 0;
+    for (const l of Object.values(ents)) for (const e of Object.values(l || {})) if (e && e.cat === 'unit' && e.aid === aid) { if (e.status === 'pending') pend++; else if (e.status === 'approved') ok++; }
+    return `확인 ${ok}명${pend ? ` · <span class="pill warn">대기 ${pend}</span>` : ''} <button class="btn xs ${a.open ? '' : 'primary'}" data-a="toggle" data-id="${aid}">${a.open ? '제출 마감' : '다시 열기'}</button>`;
+  }
   function todayStr(ts) {
     const d = new Date(ts);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -273,6 +300,7 @@
         <label>입력 방식<select id="af-mode">${Object.entries(T.MODE_NAMES).map(([k, v]) => `<option value="${k}" ${draft.mode === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         <label data-show="score rank">점수 변동 폭<select id="af-weight">${Object.entries(T.K_PRESETS).map(([k, v]) => `<option value="${k}" ${draft.weight === k ? 'selected' : ''}>${v.name} (최대 ±${v.k / 2})</option>`).join('')}</select></label>
         <label data-show="score">기준 점수 <span style="font-size:.85em">(선택)</span><input id="af-cut" type="number" step="any" value="${esc(draft.cut ?? '')}" placeholder="예: 80 — 비우면 순수 상대평가"></label>
+        <label data-show="score" style="display:flex;align-items:center;gap:8px;margin-top:28px"><input type="checkbox" class="chk" id="af-student" ${draft.studentInput ? 'checked' : ''}> 학생이 점수 입력 → 선생님 확인</label>
         <label data-show="grade">기준 점수 <span style="font-size:.85em">(매우잘함일 때 오르는 점수)</span><input id="af-base" type="number" min="1" value="${esc(draft.base ?? T.DEFAULT_GRADE_BASE)}"></label>
         <label>날짜<input id="af-date" type="date" value="${date0}"></label>
       </div>
@@ -303,8 +331,11 @@
         const v = T.GRADE_ALIAS[v0] || v0;
         const input = mode === 'grade'
           ? `<select data-r="${u}" ${readonly ? 'disabled' : ''}><option value=""></option>${T.GRADES.map((g) => `<option ${v === g ? 'selected' : ''}>${g}</option>`).join('')}</select>`
-          : `<input data-r="${u}" type="number" step="any" value="${esc(v)}" placeholder="${mode === 'rank' ? '순위' : '점수'}" ${readonly ? 'disabled' : ''}>`;
-        return `<tr><td>${nameTag(u)}</td><td>${input}</td><td class="num delta-cell" data-d="${u}"></td></tr>`;
+          : `<input data-r="${u}" type="number" step="any" value="${esc(v)}" placeholder="${mode === 'rank' ? '순위' : el.querySelector('#af-student').checked ? '(학생 입력)' : '점수'}" ${readonly ? 'disabled' : ''}>`;
+        // 학생이 입력한 점수 현황
+        const sub = id ? Object.values(ents[u] || {}).find((e) => e.cat === 'unit' && e.aid === id && e.status !== 'rejected') : null;
+        const subTxt = sub ? ` <span class="pill ${sub.status === 'approved' ? 'good' : 'warn'}">학생 ${esc(sub.score)}점 · ${sub.status === 'approved' ? '확인' : '대기'}</span>` : '';
+        return `<tr><td>${nameTag(u)}</td><td>${input}${subTxt}</td><td class="num delta-cell" data-d="${u}"></td></tr>`;
       }).join('');
     };
     const collect = () => {
@@ -315,6 +346,8 @@
       const cut = el.querySelector('#af-cut').value.trim();
       draft.cut = draft.mode === 'score' && cut !== '' && isFinite(Number(cut)) ? Number(cut) : null;
       draft.base = draft.mode === 'grade' ? Math.max(1, Number(el.querySelector('#af-base').value) || T.DEFAULT_GRADE_BASE) : null;
+      draft.studentInput = draft.mode === 'score' && el.querySelector('#af-student').checked;
+      if (draft.studentInput && draft.open === undefined) draft.open = true;
       draft.results = {};
       el.querySelectorAll('[data-r]').forEach((i) => { if (i.value !== '') draft.results[i.dataset.r] = draft.mode === 'grade' ? i.value : Number(i.value); });
       const date = el.querySelector('#af-date').value || todayStr(B.now());
@@ -334,6 +367,14 @@
     };
     drawRows();
     el.querySelector('#af-mode').onchange = () => { collect(); draft.results = {}; drawRows(); syncFields(); };
+    el.querySelector('#af-student').onchange = () => { collect(); drawRows(); };
+    // 종류를 단원평가로 고르면 점수 방식 + 학생 입력을 기본으로
+    el.querySelector('#af-kind').onchange = (e) => {
+      if (e.target.value !== 'unit' || id) return;
+      el.querySelector('#af-mode').value = 'score';
+      el.querySelector('#af-student').checked = true;
+      collect(); drawRows(); syncFields();
+    };
     if (readonly || a0) preview();
     if (!readonly) {
       el.querySelector('#af-prev').onclick = preview;
@@ -341,11 +382,17 @@
         collect();
         if (!draft.name) return toast('활동 이름을 입력하세요.', 'bad');
         if (isClosed(draft.month)) return toast(`${T.monthLabel(draft.month)}은 마감되었어요. 날짜를 확인하세요.`, 'bad');
-        if (draft.mode !== 'grade' && Object.keys(draft.results).length < 2) return toast('2명 이상의 결과를 입력하세요.', 'bad');
-        if (!Object.keys(draft.results).length) return toast('결과를 입력하세요.', 'bad');
+        if (!draft.studentInput) {
+          if (draft.mode !== 'grade' && Object.keys(draft.results).length < 2) return toast('2명 이상의 결과를 입력하세요.', 'bad');
+          if (!Object.keys(draft.results).length) return toast('결과를 입력하세요.', 'bad');
+        }
         const aid = id || B.newKey();
         draft.createdAt = draft.createdAt || B.now();
-        await B.set('activities/' + aid, draft);
+        await B.update('', {
+          ['activities/' + aid]: draft,
+          // 학생 입력 단원평가는 학생 화면 「기록하기」에 열어 둠
+          ['openUnits/' + aid]: draft.studentInput && draft.open ? { name: draft.name, at: draft.at, month: draft.month } : null,
+        });
         actMonth = draft.month;
         m.close();
         toast('저장했어요. 점수가 다시 계산돼요.', 'good');
@@ -355,8 +402,13 @@
 
   /* ───────────── 칭찬·감점 ───────────── */
   let praiseKind = 'praise';
+  let svSel = new Set(), svFor = null;
   SK.praise = () => {
-    main().innerHTML = `<div class="a-head"><h2>칭찬·감점</h2><span class="muted">학생을 고르고 한 번에 줄 수 있어요 · 감점은 본인과 선생님만 봐요</span></div>
+    main().innerHTML = `<div class="a-head"><h2>칭찬·감점·1인1역</h2><span class="muted">감점 기록은 본인과 선생님만 봐요</span></div>
+      <div class="panel" style="margin-bottom:16px"><div class="a-head" style="margin:0 0 10px"><h3 style="margin:0">🤝 1인1역·봉사 체크</h3><span class="sp"></span>
+        <input type="date" id="sv-date" style="width:auto"><button class="btn xs ghost" data-sv="all">모두 체크</button><button class="btn xs ghost" data-sv="none">모두 해제</button><button class="btn sm primary" id="sv-save">저장</button></div>
+        <div class="stu-grid" id="sv-grid"></div>
+        <p class="note" id="sv-note"></p></div>
       <div class="two-col"><div class="panel"><div class="a-head" style="margin-bottom:10px"><h3 style="margin:0">학생 선택</h3><span class="sp"></span>
         <button class="btn xs ghost" data-pr="all">전체</button><button class="btn xs ghost" data-pr="none">해제</button></div><div class="stu-grid" id="pr-grid"></div></div>
       <div class="col" style="gap:16px"><div class="panel"><h3>주기</h3>
@@ -371,7 +423,31 @@
     };
     setKind(praiseKind);
     $('#pr-kind').onclick = (e) => { const b = e.target.closest('[data-k]'); if (b) setKind(b.dataset.k); };
+    // 1인1역·봉사: 날짜별로 체크 (하루 1번, 기록 키 = sv-날짜)
+    $('#sv-date').value = todayStr(B.now());
+    svFor = null;
+    $('#sv-date').onchange = () => { svFor = null; RD.praise(); };
+    $('#sv-save').onclick = async () => {
+      const date = $('#sv-date').value;
+      if (!date) return;
+      const ts = new Date(`${date}T15:00:00`).getTime();
+      const month = T.monthKey(ts);
+      if (isClosed(month)) return toast(`${T.monthLabel(month)}은 마감되었어요.`, 'bad');
+      const upd = {};
+      let on = 0;
+      for (const u of Object.keys(S.users)) {
+        const has = !!(ents[u] && ents[u]['sv-' + date]);
+        if (svSel.has(u)) { on++; if (!has) upd[`entries/${u}/sv-${date}`] = { cat: 'service', text: `1인1역·봉사 (${date.slice(5).replace('-', '/')})`, month, ts, by: 'teacher', status: 'approved' }; }
+        else if (has) upd[`entries/${u}/sv-${date}`] = null;
+      }
+      if (Object.keys(upd).length) await B.update('', upd);
+      toast(`${date.slice(5).replace('-', '/')} 1인1역·봉사 ${on}명 저장`, 'good');
+    };
     main().onclick = async (e) => {
+      const sv = e.target.closest('[data-svu]');
+      if (sv) { svSel.has(sv.dataset.svu) ? svSel.delete(sv.dataset.svu) : svSel.add(sv.dataset.svu); RD.praise(); return; }
+      const sa = e.target.closest('[data-sv]');
+      if (sa) { if (sa.dataset.sv === 'all') Object.keys(S.users).forEach((u) => svSel.add(u)); else svSel.clear(); RD.praise(); return; }
       const g = e.target.closest('[data-g]');
       if (g) { sel.has(g.dataset.g) ? sel.delete(g.dataset.g) : sel.add(g.dataset.g); RD.praise(); return; }
       const p = e.target.closest('[data-pr]');
@@ -405,6 +481,14 @@
     const m = A.curMonth();
     const r = computeMonth(m);
     const ids = Object.keys(S.users).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+    const date = $('#sv-date').value;
+    if (svFor !== date) { svFor = date; svSel = new Set(ids.filter((u) => ents[u] && ents[u]['sv-' + date])); }
+    const saved = new Set(ids.filter((u) => ents[u] && ents[u]['sv-' + date]));
+    const dirty = ids.some((u) => saved.has(u) !== svSel.has(u));
+    $('#sv-grid').innerHTML = ids.map((u) => `<button data-svu="${u}" class="${svSel.has(u) ? 'sel' : ''}"><span class="nm">${svSel.has(u) ? '✅ ' : ''}${esc(nameOf(u))}</span>
+      <span class="sub">이번 달 ${r.detail[u] && r.detail[u].cats.service ? r.detail[u].cats.service.count : 0}회</span></button>`).join('') || '<p class="empty">학생이 없어요</p>';
+    const c = A.settings().cats.service;
+    $('#sv-note').innerHTML = `체크한 학생에게 ${signed(c.points)}점 (하루 1번${c.cap ? `, 월 ${c.cap}회까지` : ''}) · 저장된 ${saved.size}명${dirty ? ' · <b style="color:var(--warn)">저장하지 않은 변경이 있어요</b>' : ''}`;
     $('#pr-grid').innerHTML = ids.map((u) => {
       const c = r.detail[u] && r.detail[u].cats;
       return `<button data-g="${u}" class="${sel.has(u) ? 'sel' : ''}"><span class="nm">${esc(nameOf(u))}</span>
@@ -416,6 +500,87 @@
     $('#pr-log').innerHTML = logs.length ? `<ul class="rows">${logs.slice(0, 40).map((e) => `<li>${e.cat === 'praise' ? '👏' : '⚠️'} ${nameTag(e.uid)}<span>${esc(e.text)}</span>
       <span class="right"><b class="delta ${e.points > 0 ? 'up' : 'down'}">${signed(e.points)}</b><span class="muted" style="font-size:.8em">${fmtDate(e.ts)}</span><button class="btn xs ghost" data-pdel="${e.uid}/${e.id}">삭제</button></span></li>`).join('')}</ul>` : '<p class="empty">아직 없어요</p>';
   };
+
+  /* ───────────── 급수·한자 ───────────── */
+  SK.levels = () => {
+    main().innerHTML = `<div class="a-head"><h2>급수·한자</h2><span class="sp"></span>
+      <span class="muted" style="font-size:.88em">급수 칸을 바꾸면 점수 없이 급수만 바뀌어요(처음 설정용). 「승급」은 한 단계 올리고 점수도 줘요.</span></div>
+      <div class="tbl-wrap" id="lv-table"></div>
+      <div class="grid2" style="margin-top:16px"><div class="panel" id="lv-ref-typing"></div><div class="panel" id="lv-ref-recorder"></div></div>`;
+    const TR = window.Tracks.TRACKS;
+    for (const tk of ['typing', 'recorder']) {
+      $('#lv-ref-' + tk).innerHTML = `<h3>${TR[tk].ic} ${TR[tk].name} 급수표</h3><table class="tbl"><tbody>${TR[tk].levels.map((l, i) => `<tr><td><b>${i + 1}. ${esc(l.name)}</b></td><td>${l.songs ? `${esc(l.songs)}<br>` : ''}<span class="muted">${esc(l.cond)}</span></td><td class="muted">${esc(l.reward)}</td></tr>`).join('')}</tbody></table>`;
+    }
+    main().onchange = async (e) => {
+      const s = e.target.closest('[data-lvset]');
+      if (!s) return;
+      const [u, tk] = s.dataset.lvset.split('|');
+      await B.set(`levels/${u}/${tk}`, Number(s.value));
+      toast(`${nameOf(u)} ${TR[tk].name} 급수를 ${window.Tracks.levelName(tk, Number(s.value))}(으)로 맞췄어요.`, 'good');
+    };
+    main().onclick = async (e) => {
+      const up = e.target.closest('[data-up]');
+      if (up) {
+        const [u, tk] = up.dataset.up.split('|');
+        const cur = (levels[u] && levels[u][tk]) || 0;
+        const t = TR[tk];
+        if (cur >= t.levels.length) return;
+        const m = A.curMonth();
+        if (isClosed(m)) return toast('이번 달은 마감되었어요.', 'bad');
+        if (!(await confirmBox(`${t.name} 승급`, `<b>${esc(nameOf(u))}</b> — ${esc(window.Tracks.levelName(tk, cur))} → <b>${esc(t.levels[cur].name)}</b><br>심사를 통과했나요? 점수 ${signed(A.settings().cats[t.cat].points)}점(한 달에 1번까지)`, '승급'))) return;
+        await B.update('', {
+          [`levels/${u}/${tk}`]: cur + 1,
+          [`entries/${u}/${B.newKey()}`]: { cat: t.cat, track: tk, level: cur + 1, text: `${t.name} ${t.levels[cur].name} 승급 (선생님 심사)`, month: m, ts: B.now(), by: 'teacher', status: 'approved' },
+        });
+        toast('승급했어요! 🎉', 'good');
+        return;
+      }
+      const hj = e.target.closest('[data-hj]');
+      if (hj) editHanja(hj.dataset.hj);
+    };
+  };
+  RD.levels = () => {
+    const TR = window.Tracks.TRACKS;
+    const H = window.Hanja;
+    const m = A.curMonth();
+    const ids = Object.keys(S.users).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+    const today = todayStr(B.now());
+    const sel = (u, tk) => {
+      const cur = (levels[u] && levels[u][tk]) || 0;
+      return `<div class="row-flex" style="gap:6px;flex-wrap:nowrap"><select data-lvset="${u}|${tk}" style="width:auto">${['시작 전', ...TR[tk].levels.map((l) => l.name)].map((n, i) => `<option value="${i}" ${i === cur ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+        ${cur < TR[tk].levels.length ? `<button class="btn xs good" data-up="${u}|${tk}">승급</button>` : ''}</div>`;
+    };
+    $('#lv-table').innerHTML = ids.length ? `<table class="tbl"><thead><tr><th>학생</th><th>⌨️ 타자</th><th>🎵 리코더</th><th>🀄 한자 급수</th><th class="num">배운 한자</th><th>오늘</th><th class="num">이번 달 학습</th><th>최근 시험</th><th></th></tr></thead><tbody>
+      ${ids.map((u) => {
+        const h = Object.assign({ learned: 0, level: 0 }, hanjaAll[u] || {});
+        const daily = Object.entries(ents[u] || {}).filter(([k, e]) => e.cat === 'hanjaDaily' && e.month === m).length;
+        const lt = h.lastTest;
+        return `<tr><td>${nameTag(u)}</td><td>${sel(u, 'typing')}</td><td>${sel(u, 'recorder')}</td>
+          <td><b>${esc(window.Tracks.levelName('hanja', h.level))}</b></td><td class="num">${h.learned} / ${H.LIST.length}</td>
+          <td>${h.lastDone === today ? '✅' : '-'}</td><td class="num">${daily}회</td>
+          <td>${lt ? `${fmtDate(lt.ts)} ${esc(H.LEVELS[lt.level] || '')} ${lt.right}/${lt.total} ${lt.passed ? '<span class="pill good">통과</span>' : '<span class="pill warn">재도전</span>'}` : '-'}</td>
+          <td><button class="btn xs" data-hj="${u}">한자 조정</button></td></tr>`;
+      }).join('')}</tbody></table>` : '<p class="empty" style="padding:30px">학생이 없어요</p>';
+  };
+  function editHanja(u) {
+    const H = window.Hanja;
+    const h = Object.assign({ learned: 0, level: 0 }, hanjaAll[u] || {});
+    const md = modal(`<h3>${esc(nameOf(u))} 한자 진도 조정</h3>
+      <div class="form-grid"><label>배운 한자 수 (0~${H.LIST.length})<input id="hj-l" type="number" min="0" max="${H.LIST.length}" value="${h.learned}"></label>
+      <label>한자 급수<select id="hj-v">${['시작 전', ...H.LEVELS].map((n, i) => `<option value="${i}" ${i === h.level ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>
+      <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" class="chk" id="hj-f"> 오늘 떨어진 승급 시험을 다시 볼 수 있게 하기</label>
+      <p class="note">점수는 바뀌지 않아요. 전학 온 학생의 진도를 맞추거나 오류를 고칠 때 쓰세요.</p>
+      <div class="foot"><button class="btn ghost" data-close>취소</button><button class="btn primary" data-ok>저장</button></div>`);
+    md.el.querySelector('[data-ok]').onclick = async () => {
+      const learned = Math.max(0, Math.min(H.LIST.length, Number(md.el.querySelector('#hj-l').value) || 0));
+      const level = Number(md.el.querySelector('#hj-v').value);
+      const upd = { [`hanja/${u}/learned`]: learned, [`hanja/${u}/level`]: level };
+      if (md.el.querySelector('#hj-f').checked) upd[`hanja/${u}/failDay`] = null;
+      await B.update('', upd);
+      md.close();
+      toast('저장했어요.', 'good');
+    };
+  }
 
   /* ───────────── 학생 관리 ───────────── */
   const genPw = () => String(Math.floor(100000 + Math.random() * 900000));
@@ -499,7 +664,7 @@
     } else if (b.dataset.s === 'del') {
       if (!(await confirmBox('학생 삭제', `<b>${esc(x.name)}</b> 학생을 삭제할까요? 기록과 점수가 모두 사라지고 되돌릴 수 없어요.`, '삭제', true))) return;
       try { await B.deleteAccount(x.loginId, secrets[u] && secrets[u].pw); } catch (err) { console.warn('계정 삭제 실패', err); }
-      const upd = { ['users/' + u]: null, ['secrets/' + u]: null, ['entries/' + u]: null };
+      const upd = { ['users/' + u]: null, ['secrets/' + u]: null, ['entries/' + u]: null, ['levels/' + u]: null, ['hanja/' + u]: null };
       for (const m of allMonths()) upd[`myDetail/${m}/${u}`] = null;
       await B.update('', upd);
       toast('삭제했어요.');
@@ -589,9 +754,15 @@
       <div class="two-col"><div class="col" style="gap:16px">
         <div class="panel"><h3>생활 점수 항목</h3><p class="note" style="margin-top:0">월 한도 0 = 무제한. 한도를 넘은 기록은 0점으로 반영돼요.</p>
           <table class="tbl"><thead><tr><th>항목</th><th>입력</th><th>1건 점수</th><th>월 한도(회)</th></tr></thead><tbody>
-          ${Object.entries(st.cats).map(([k, c]) => `<tr><td><input data-cn="${k}" value="${esc(c.name)}"></td><td>${c.who === 'teacher' ? '선생님' : '학생→승인'}</td>
+          ${Object.entries(st.cats).map(([k, c]) => `<tr><td><input data-cn="${k}" value="${esc(c.name)}"></td><td>${{ teacher: '선생님', student: '학생→승인', system: '자동(앱 채점)' }[c.who] || ''}</td>
             <td><input data-cp="${k}" type="number" value="${c.points}" style="width:90px"></td><td><input data-cc="${k}" type="number" min="0" value="${c.cap}" style="width:90px"></td></tr>`).join('')}
           </tbody></table></div>
+        <div class="panel"><h3>🀄 한자 학습</h3><p class="note" style="margin-top:0">가정 학습은 인정하지 않아요 — 아래 요일·시간에만 학습과 승급 시험이 열려요.</p>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">${['일', '월', '화', '수', '목', '금', '토'].map((d, i) => `<label style="display:flex;align-items:center;gap:4px;margin:0;color:var(--text)"><input type="checkbox" class="chk" data-hday="${i}" ${st.hanja.days.includes(i) ? 'checked' : ''}>${d}</label>`).join('')}</div>
+          <div class="form-grid"><label>시작 시각<input id="hj-start" type="time" value="${esc(st.hanja.start)}"></label><label>끝 시각<input id="hj-end" type="time" value="${esc(st.hanja.end)}"></label>
+            <label>하루 새 한자 수<input id="hj-daily" type="number" min="1" max="10" value="${st.hanja.daily}"></label></div>
+          <div class="form-grid">${window.Hanja.LEVELS.map((n, i) => `<label>${n} 승급 시험 문항 수<input data-htc="${i}" type="number" min="5" max="60" value="${st.hanja.testCount[i]}"><small data-htr="${i}"></small></label>`).join('')}</div>
+          <p class="note">통과 기준: 10문항 이하 90% · 11~29문항 80% · 30문항 이상 70%</p></div>
         <div class="panel"><h3>등급 방식 비율 (수행평가 등)</h3><p class="note" style="margin-top:0">활동의 <b>기준 점수</b>에 곱하는 비율(%)이에요. 예: 기준 40점, 잘함 50% → +20점. 음수는 감점.</p>
           <div class="form-grid">${T.GRADES.map((g) => `<label>${g} (%)<input data-gp="${g}" type="number" value="${st.gradePct[g]}"></label>`).join('')}</div></div>
         <div class="panel"><h3>티어 기준 점수</h3><div class="form-grid">
@@ -605,6 +776,13 @@
           <div class="foot"><button class="btn" id="tp-go">비밀번호 변경</button></div>
           ${B.mode === 'demo' ? '<p class="note">데모 모드입니다.</p><button class="btn danger sm" id="demo-reset2">데모 데이터 초기화</button>' : ''}</div>
       </div></div>`;
+    // 문항 수에 따라 통과 기준 표시
+    const showRate = () => $$('[data-htc]').forEach((i) => {
+      const n = Math.round(Number(i.value) || 0);
+      $(`[data-htr="${i.dataset.htc}"]`).textContent = n ? `통과: ${Math.round(T.passRate(n) * 100)}% (${Math.ceil(n * T.passRate(n))}문항 이상)` : '';
+    });
+    $$('[data-htc]').forEach((i) => (i.oninput = showRate));
+    showRate();
     $('#st-save').onclick = async () => {
       const raw = JSON.parse(JSON.stringify(S.settingsRaw || {}));
       raw.cats = {}; raw.thresholds = {};
@@ -616,6 +794,10 @@
       for (const k of ['silver', 'gold', 'platinum', 'diamond']) raw.thresholds[k] = Number($(`[data-th="${k}"]`).value);
       const t = raw.thresholds;
       if (!(t.silver < t.gold && t.gold < t.platinum && t.platinum < t.diamond)) return toast('티어 기준은 실버 < 골드 < 플래티넘 < 다이아 순이어야 해요.', 'bad');
+      const days = $$('[data-hday]').filter((c) => c.checked).map((c) => Number(c.dataset.hday));
+      const testCount = $$('[data-htc]').map((i) => Math.max(5, Math.min(60, Math.round(Number(i.value) || 20))));
+      raw.hanja = { days, start: $('#hj-start').value || '08:30', end: $('#hj-end').value || '16:30', daily: Math.max(1, Math.min(10, Math.round(Number($('#hj-daily').value) || 5))), testCount };
+      if (raw.hanja.start >= raw.hanja.end) return toast('한자 학습 시작 시각이 끝 시각보다 빨라야 해요.', 'bad');
       raw.gradePct = {};
       for (const g of T.GRADES) {
         const v = Number($(`[data-gp="${g}"]`).value);

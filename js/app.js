@@ -9,7 +9,8 @@
     uid: null, isTeacher: false, teacherUid: null, settingUp: false,
     className: '', teacherName: '선생님', settingsRaw: null,
     users: {}, standings: {}, seasons: {}, myEntries: {}, myDetail: {},
-    subs: [], detailSubs: {}, screen: null, tab: 'home', pick: 'reading', mineMonth: null,
+    subs: [], detailSubs: {}, screen: null, tab: 'home', pick: 'unit', mineMonth: null,
+    myLevels: {}, hanja: null, openUnits: {},
   };
   const settings = () => T.mergeSettings(S.settingsRaw);
   const curMonth = () => T.monthKey(B.now());
@@ -190,6 +191,9 @@
     sub('seasons', (v) => { S.seasons = v || {}; render(); });
     if (!S.isTeacher) {
       sub('entries/' + uid, (v) => { S.myEntries = v || {}; render(); });
+      sub('levels/' + uid, (v) => { S.myLevels = v || {}; render(); });
+      sub('hanja/' + uid, (v) => { S.hanja = v || { learned: 0, level: 0, review: {} }; render(); });
+      sub('openUnits', (v) => { S.openUnits = v || {}; render(); });
       watchDetail(curMonth());
       S.tab = 'home';
       show('student');
@@ -208,7 +212,8 @@
     Object.values(S.detailSubs).forEach((u) => u());
     if (window.Teacher) window.Teacher.leave();
     $('#modal-root').innerHTML = '';
-    Object.assign(S, { uid: null, isTeacher: false, subs: [], detailSubs: {}, users: {}, standings: {}, seasons: {}, myEntries: {}, myDetail: {}, mineMonth: null });
+    if (window.HanjaStudy) window.HanjaStudy.reset();
+    Object.assign(S, { uid: null, isTeacher: false, subs: [], detailSubs: {}, users: {}, standings: {}, seasons: {}, myEntries: {}, myDetail: {}, mineMonth: null, myLevels: {}, hanja: null, openUnits: {} });
   }
   async function logout() { await B.signOut(); }
   document.addEventListener('click', (e) => { if (e.target.closest('[data-act="logout"]')) logout(); });
@@ -236,9 +241,12 @@
     const sb = $('#st-tabs [data-tab="submit"]');
     sb.innerHTML = `✍️ 기록하기${pending ? `<span class="cnt">${pending}</span>` : ''}`;
     const main = $('#st-main');
+    if (S.tab === 'hanja') { if (window.HanjaStudy) window.HanjaStudy.render(main); return; }
     const fn = { home: stHome, rank: stRank, submit: stSubmit, mine: stMine, fame: stFame }[S.tab];
-    // 입력 중인 폼은 다시 그리지 않음
-    if (S.tab === 'submit' && main.dataset.tab === 'submit') { stSubmitList(); return; }
+    // 입력 중인 폼은 다시 그리지 않음 (선택지가 바뀐 경우에만 다시 그림)
+    const formKey = JSON.stringify([S.pick, Object.keys(S.openUnits || {}), S.myLevels, Object.values(S.myEntries).filter((e) => e.status !== 'rejected').map((e) => [e.cat, e.aid || '', e.status, e.ts])]);
+    if (S.tab === 'submit' && main.dataset.tab === 'submit' && main.dataset.key === formKey) { stSubmitList(); return; }
+    main.dataset.key = S.tab === 'submit' ? formKey : '';
     main.dataset.tab = S.tab;
     main.innerHTML = fn();
     if (S.tab === 'submit') bindSubmit();
@@ -290,13 +298,22 @@
         <div class="stat"><div class="k">생활 점수 (칭찬·독서·과제·역할)</div><div class="v ${d && d.accum > 0 ? 'up' : d && d.accum < 0 ? 'down' : ''}">${d ? signed(d.accum) : 0}</div></div>
         <div class="stat"><div class="k">승인 대기 중인 기록</div><div class="v">${Object.values(S.myEntries).filter((e) => e.status === 'pending').length}건</div></div>
       </div>
+      <div class="panel" style="margin-top:16px"><h3>🎖️ 나의 급수</h3><div class="grid3">
+        ${['typing', 'recorder', 'hanja'].map((tk) => {
+          const t = window.Tracks.TRACKS[tk];
+          const cur = myLevel(tk);
+          return `<div class="stat"><div class="k">${t.ic} ${t.name}</div><div class="v" style="font-size:1.3em">${esc(window.Tracks.levelName(tk, cur))}</div>
+            <div class="muted" style="font-size:.8em;margin-top:4px">${cur < t.levels.length ? `다음: ${esc(t.levels[cur].name)}` : '최고 급수!'}</div></div>`;
+        }).join('')}</div></div>
       <div class="panel" style="margin-top:16px"><h3>📘 티어는 이렇게 정해져요</h3>
         <div class="note">
           · 매달 1일, 모두 <b>1000점</b>에서 새로 시작해요. 월말에 선생님이 마감하면 그달 티어와 보상이 확정돼요.<br>
           · <b>수행평가·학급 대회</b>는 반 친구들과 결과를 비교해 점수가 오르내려요. 나보다 점수가 높은 친구보다 잘하면 더 많이 올라요.
             기준 점수가 있는 활동은 기준보다 잘하면 오르고, 못하면 내려가요.<br>
           · <b>등급 평가</b>는 ${T.GRADES.map((g) => `${g} ${st.gradePct[g] > 0 ? '+' : ''}${st.gradePct[g]}%`).join(' · ')} (활동의 기준 점수 기준)<br>
-          · <b>칭찬, 독서, 과제, 1인1역·봉사</b>는 할수록 점수가 쌓여요. (독서·과제·역할은 「기록하기」에서 제출 → 선생님 승인)<br>
+          · <b>단원평가</b>는 「기록하기」에서 내 점수를 입력하면 선생님이 확인해요.<br>
+          · <b>칭찬, 독후감, 과제, 1인1역·봉사, 한자 매일 학습</b>은 할수록 점수가 쌓여요.<br>
+          · <b>타자·리코더·한자 급수</b>가 오르면 +${st.cats.lvTyping.points}점 (한 달에 종목별 1번까지)<br>
           · 티어: 브론즈 ~${th.silver - 1} · 실버 ${th.silver}~ · 골드 ${th.gold}~ · 플래티넘 ${th.platinum}~ · 다이아 ${th.diamond}~ · <b>챔피언 = 그달 1위</b><br>
           · 이름 앞 엠블럼은 <b>지난달 확정 티어</b>예요.
         </div></div>`;
@@ -317,31 +334,64 @@
       }).join('')}</ul></div>`;
   }
 
-  const CAT_UI = {
-    reading: { ic: '📚', fields: [['title', '책 제목', true], ['note', '한 줄 감상 (선택)', false]] },
-    homework: { ic: '📝', fields: [['title', '과제 이름', true]] },
-    service: { ic: '🤝', fields: [['title', '한 일 (예: 급식 도우미, 교실 정리)', true]] },
-  };
+  const CAT_IC = { unit: '📝', reading: '📚', homework: '✅', lvTyping: '⌨️', lvRecorder: '🎵', lvHanja: '🀄', hanjaDaily: '🀄', service: '🤝', praise: '👏', penalty: '⚠️' };
+  const PICKS = [
+    { k: 'unit', ic: '📝', t: '단원평가', d: '내 점수 입력 → 선생님 확인' },
+    { k: 'reading', ic: '📚', t: '독후감', d: '이번 주 통과 O / X' },
+    { k: 'homework', ic: '✅', t: '과제·숙제', d: '완료한 과제 기록' },
+    { k: 'levelup', ic: '⬆️', t: '승급 심사', d: '타자·리코더 다음 급수' },
+  ];
   function approvedCount(cat, month) {
-    return Object.values(S.myEntries).filter((e) => e.cat === cat && e.month === month && e.status === 'approved').length;
+    return Object.values(S.myEntries).filter((e) => e.cat === cat && e.month === month && e.status === 'approved' && e.ox !== 'X').length;
   }
+  function weekKey(ts) {
+    const d = new Date(ts);
+    const day = (d.getDay() + 6) % 7; // 월요일 = 0
+    const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() - day);
+    return `${mon.getFullYear()}-${mon.getMonth() + 1}-${mon.getDate()}`;
+  }
+  const myLevel = (track) => (track === 'hanja' ? (S.hanja && S.hanja.level) || 0 : (S.myLevels && S.myLevels[track]) || 0);
   function stSubmit() {
     const st = settings();
     const m = curMonth();
     const closed = !!(S.seasons[m] && S.seasons[m].closedAt);
-    const cat = st.cats[S.pick];
-    return `<div class="panel"><h3>✍️ 기록하기 <span class="muted">선생님이 승인하면 점수에 반영돼요</span></h3>
+    let form = '';
+    if (S.pick === 'unit') {
+      const done = new Set(Object.values(S.myEntries).filter((e) => e.cat === 'unit' && e.status !== 'rejected').map((e) => e.aid));
+      const open = Object.entries(S.openUnits || {}).filter(([aid]) => !done.has(aid)).sort((a, b) => (b[1].at || 0) - (a[1].at || 0));
+      form = open.length ? `<form id="sub-form"><label>단원평가<select name="aid">${open.map(([aid, u]) => `<option value="${esc(aid)}">${esc(u.name)}</option>`).join('')}</select></label>
+          <label>내 점수<input name="score" type="number" min="0" max="100" step="any" required inputmode="decimal" placeholder="예: 85"></label>
+          <div class="foot"><button class="btn primary lg" type="submit">점수 제출</button></div></form>`
+        : '<p class="empty">지금 입력할 단원평가가 없어요. 선생님이 단원평가를 열면 여기에 나타나요.</p>';
+    } else if (S.pick === 'reading') {
+      const wk = weekKey(B.now());
+      const thisWeek = Object.values(S.myEntries).find((e) => e.cat === 'reading' && e.status !== 'rejected' && weekKey(e.ts) === wk);
+      const c = st.cats.reading;
+      form = thisWeek ? `<p class="empty">이번 주 독후감은 이미 제출했어요 (${esc(thisWeek.ox || '')}). 다음 주에 다시 제출해요.</p>`
+        : `<p class="note">이번 주 독후감을 선생님께 통과받았나요? 통과(O)는 ${signed(c.points)}점${c.cap ? ` · 이번 달 ${approvedCount('reading', m)}/${c.cap}` : ''}</p>
+          <div class="grid2"><button class="btn good lg" data-ox="O">⭕ 통과했어요</button><button class="btn lg" data-ox="X">❌ 아직 못 했어요</button></div>`;
+    } else if (S.pick === 'homework') {
+      const c = st.cats.homework;
+      form = `<form id="sub-form"><label>과제 이름<input name="title" required maxlength="60" placeholder="예: 수학 익힘 42~43쪽"></label>
+        <p class="note">${signed(c.points)}점${c.cap ? ` · 이번 달 ${approvedCount('homework', m)}/${c.cap}` : ''}</p>
+        <div class="foot"><button class="btn primary lg" type="submit">과제 완료 제출</button></div></form>`;
+    } else {
+      const TR = window.Tracks.TRACKS;
+      form = ['typing', 'recorder'].map((tk) => {
+        const t = TR[tk];
+        const cur = myLevel(tk);
+        const next = t.levels[cur];
+        const pending = Object.values(S.myEntries).some((e) => e.cat === t.cat && e.status === 'pending');
+        return `<div class="stat" style="margin-bottom:10px"><div class="k">${t.ic} ${t.name} · 현재 <b style="color:var(--text)">${esc(window.Tracks.levelName(tk, cur))}</b></div>
+          ${next ? `<div style="margin:6px 0"><b>다음: ${esc(next.name)}</b>${next.songs ? ` <span class="muted">(${esc(next.songs)})</span>` : ''}<br><span class="muted">${esc(next.cond)}</span></div>
+            ${pending ? '<span class="pill warn">심사 신청함 — 선생님 확인 대기</span>' : `<button class="btn primary" data-lv="${tk}">${esc(next.name)} 승급 심사 신청</button>`}`
+            : '<div style="margin-top:6px">🏆 최고 급수 달성!</div>'}</div>`;
+      }).join('') + `<p class="note">선생님 앞에서 심사를 통과하면 선생님이 승인해 줘요. 승급하면 ${signed(st.cats.lvTyping.points)}점 (한 달에 트랙별 1번까지)</p>`;
+    }
+    return `<div class="panel"><h3>✍️ 기록하기 <span class="muted">선생님이 확인하면 점수에 반영돼요</span></h3>
       ${closed ? `<p class="empty">${esc(T.monthLabel(m))}은 이미 마감되었어요. 다음 달 1일부터 다시 기록할 수 있어요.</p>` : `
-      <div class="cat-pick">${T.STUDENT_CATS.map((k) => {
-        const c = st.cats[k];
-        const n = approvedCount(k, m);
-        return `<button data-pick="${k}" class="${S.pick === k ? 'on' : ''}"><span class="ic">${CAT_UI[k].ic}</span><span class="t">${esc(c.name)}</span>
-          <span class="d">1건 ${signed(c.points)}점${c.cap ? ` · 이번 달 ${n}/${c.cap}` : ''}</span></button>`;
-      }).join('')}</div>
-      <form id="sub-form">
-        ${CAT_UI[S.pick].fields.map(([k, l, req]) => `<label>${esc(l)}<input name="${k}" ${req ? 'required' : ''} maxlength="80"></label>`).join('')}
-        <div class="foot"><button class="btn primary lg" type="submit">${esc(cat.name)} 제출</button></div>
-      </form>`}
+      <div class="cat-pick four">${PICKS.map((p) => `<button data-pick="${p.k}" class="${S.pick === p.k ? 'on' : ''}"><span class="ic">${p.ic}</span><span class="t">${p.t}</span><span class="d">${p.d}</span></button>`).join('')}</div>
+      <div id="sub-body">${form}</div>`}
       </div>
       <div class="panel" style="margin-top:16px"><h3>🕘 이번 달 내 기록</h3><ul class="rows" id="sub-list"></ul></div>`;
   }
@@ -353,7 +403,7 @@
     const list = Object.entries(S.myEntries).map(([id, e]) => Object.assign({ id }, e))
       .filter((e) => e.month === m && e.by === 'student').sort((a, b) => b.ts - a.ts);
     el.innerHTML = list.map((e) => `<li><span class="status ${e.status}">${{ pending: '대기', approved: '승인', rejected: '반려' }[e.status]}</span>
-      <span>${CAT_UI[e.cat] ? CAT_UI[e.cat].ic : ''} <b>${esc(st.cats[e.cat] ? st.cats[e.cat].name : e.cat)}</b> · ${esc(e.text)}</span>
+      <span>${CAT_IC[e.cat] || ''} <b>${esc(e.cat === 'unit' ? '단원평가' : st.cats[e.cat] ? st.cats[e.cat].name : e.cat)}</b> · ${esc(e.text)}</span>
       ${e.status === 'rejected' && e.reason ? `<span class="muted" style="font-size:.85em">사유: ${esc(e.reason)}</span>` : ''}
       <span class="right"><span class="muted" style="font-size:.85em">${fmtDate(e.ts)}</span>${e.status === 'pending' ? `<button class="btn xs ghost" data-del="${e.id}">취소</button>` : ''}</span></li>`).join('')
       || '<li class="empty">아직 기록이 없어요</li>';
@@ -361,22 +411,36 @@
   function bindSubmit() {
     stSubmitList();
     $$('[data-pick]').forEach((b) => (b.onclick = () => { S.pick = b.dataset.pick; $('#st-main').dataset.tab = ''; render(); }));
-    const f = $('#sub-form');
-    if (f) f.onsubmit = async (e) => {
-      e.preventDefault();
-      const title = f.title.value.trim();
-      const note = f.note ? f.note.value.trim() : '';
-      if (!title) return;
-      const text = S.pick === 'reading' ? `『${title}』${note ? ' — ' + note : ''}` : title;
-      const btn = f.querySelector('button');
-      btn.disabled = true;
+    const submit = async (data, btn) => {
+      if (btn) btn.disabled = true;
       try {
-        await B.set(`entries/${S.uid}/${B.newKey()}`, { cat: S.pick, text, month: curMonth(), ts: B.now(), by: 'student', status: 'pending' });
-        f.reset();
-        toast('제출했어요! 선생님이 승인하면 점수에 반영돼요.', 'good');
-      } catch (err) { toast(err.message, 'bad'); }
-      btn.disabled = false;
+        await B.set(`entries/${S.uid}/${B.newKey()}`, Object.assign({ month: curMonth(), ts: B.now(), by: 'student', status: 'pending' }, data));
+        toast('제출했어요! 선생님이 확인하면 점수에 반영돼요.', 'good');
+        $('#st-main').dataset.tab = '';
+        render();
+      } catch (err) { toast(err.message, 'bad'); if (btn) btn.disabled = false; }
     };
+    const f = $('#sub-form');
+    if (f) f.onsubmit = (e) => {
+      e.preventDefault();
+      const btn = f.querySelector('button');
+      if (S.pick === 'unit') {
+        const u = S.openUnits[f.aid.value];
+        const score = Number(f.score.value);
+        if (!u || !isFinite(score) || score < 0 || score > 100) return toast('점수를 0~100 사이로 입력하세요.', 'bad');
+        submit({ cat: 'unit', aid: f.aid.value, score, text: `${u.name} ${score}점` }, btn);
+      } else if (S.pick === 'homework') {
+        const title = f.title.value.trim();
+        if (title) submit({ cat: 'homework', text: title }, btn);
+      }
+    };
+    $$('[data-ox]').forEach((b) => (b.onclick = () => submit({ cat: 'reading', ox: b.dataset.ox, text: `이번 주 독후감 ${b.dataset.ox === 'O' ? '통과 ⭕' : '미통과 ❌'}` }, b)));
+    $$('[data-lv]').forEach((b) => (b.onclick = () => {
+      const tk = b.dataset.lv;
+      const t = window.Tracks.TRACKS[tk];
+      const next = myLevel(tk) + 1;
+      submit({ cat: t.cat, track: tk, level: next, text: `${t.name} ${t.levels[next - 1].name} 승급 심사` }, b);
+    }));
     $('#sub-list').onclick = async (e) => {
       const b = e.target.closest('[data-del]');
       if (!b) return;

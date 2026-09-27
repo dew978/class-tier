@@ -19,7 +19,7 @@
     { id: 'platinum', name: '플래티넘' },
     { id: 'diamond', name: '다이아' },
   ];
-  const KIND_NAMES = { perf: '수행평가', contest: '학급 대회·경쟁활동' };
+  const KIND_NAMES = { perf: '수행평가', unit: '단원평가', contest: '학급 대회·경쟁활동' };
   const MODE_NAMES = { score: '점수 (높을수록 좋음)', rank: '순위 (1등이 가장 좋음)', grade: '등급 (매우잘함·잘함·보통·노력요함)' };
   const GRADES = ['매우잘함', '잘함', '보통', '노력요함'];
   const GRADE_VALUES = { 매우잘함: 4, 잘함: 3, 보통: 2, 노력요함: 1 };
@@ -33,21 +33,32 @@
     cats: {
       praise: { name: '칭찬', points: 5, cap: 0, who: 'teacher' },
       penalty: { name: '감점', points: -5, cap: 0, who: 'teacher' },
-      reading: { name: '독서 기록', points: 5, cap: 10, who: 'student' },
+      reading: { name: '독후감', points: 5, cap: 5, who: 'student' },
       homework: { name: '과제·숙제 완료', points: 3, cap: 15, who: 'student' },
-      service: { name: '1인1역·봉사', points: 3, cap: 15, who: 'student' },
+      service: { name: '1인1역·봉사', points: 3, cap: 15, who: 'teacher' },
+      hanjaDaily: { name: '한자 매일 학습', points: 1, cap: 20, who: 'system' },
+      lvTyping: { name: '타자 승급', points: 10, cap: 1, who: 'student' },
+      lvRecorder: { name: '리코더 승급', points: 10, cap: 1, who: 'student' },
+      lvHanja: { name: '한자 승급', points: 10, cap: 1, who: 'system' },
     },
+    // 한자: 학교에서만 학습(요일·시간), 승급 시험 문항 수(단계별)
+    hanja: { days: [1, 2, 3, 4, 5], start: '08:30', end: '16:30', testCount: [20, 20, 20], daily: 5 },
     showScores: true,
     rewards: { champion: '', diamond: '', platinum: '', gold: '', silver: '', bronze: '' },
   };
-  const STUDENT_CATS = ['reading', 'homework', 'service'];
+  const STUDENT_CATS = ['reading', 'homework'];
+  // 승급 시험 통과 기준: 문항이 적으면 90%, 중간 80%, 많으면 70%
+  const passRate = (n) => (n <= 10 ? 0.9 : n < 30 ? 0.8 : 0.7);
 
   function mergeSettings(raw) {
     const s = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     if (!raw) return s;
     if (raw.thresholds) Object.assign(s.thresholds, raw.thresholds);
     if (raw.gradePct) for (const g of GRADES) if (isFinite(Number(raw.gradePct[g]))) s.gradePct[g] = Number(raw.gradePct[g]);
-    if (raw.cats) for (const k of Object.keys(s.cats)) if (raw.cats[k]) Object.assign(s.cats[k], raw.cats[k]);
+    if (raw.cats) for (const k of Object.keys(s.cats)) if (raw.cats[k]) Object.assign(s.cats[k], raw.cats[k], { who: s.cats[k].who });
+    // 이전 이름 자동 변경 (독서 기록 → 독후감)
+    if (s.cats.reading.name === '독서 기록') s.cats.reading.name = '독후감';
+    if (raw.hanja) Object.assign(s.hanja, raw.hanja);
     if (raw.rewards) Object.assign(s.rewards, raw.rewards);
     if (typeof raw.showScores === 'boolean') s.showScores = raw.showScores;
     return s;
@@ -142,14 +153,24 @@
       detail[u] = { acts: [], cats: {}, logs: [], comp: 0, accum: 0 };
       counts[u] = {};
     }
+    // 학생이 입력하고 선생님이 확인한 단원평가 점수 → 해당 활동의 결과로 합침
+    const submitted = {};
+    for (const [uid, list] of Object.entries(entries || {})) {
+      for (const e of Object.values(list || {})) {
+        if (e && e.cat === 'unit' && e.status === 'approved' && e.aid) (submitted[e.aid] = submitted[e.aid] || {})[uid] = e.score;
+      }
+    }
     const ev = [];
     for (const [id, a] of Object.entries(activities || {})) {
-      if (a && a.month === month) ev.push({ t: a.at || 0, id, type: 'act', a });
+      if (a && a.month === month) {
+        const aa = submitted[id] ? Object.assign({}, a, { results: Object.assign({}, submitted[id], a.results || {}) }) : a;
+        ev.push({ t: a.at || 0, id, type: 'act', a: aa });
+      }
     }
     for (const [uid, list] of Object.entries(entries || {})) {
       if (!R.hasOwnProperty(uid)) continue;
       for (const [id, e] of Object.entries(list || {})) {
-        if (e && e.month === month && e.status === 'approved') ev.push({ t: e.ts || 0, id, type: 'entry', uid, e });
+        if (e && e.month === month && e.status === 'approved' && e.cat !== 'unit') ev.push({ t: e.ts || 0, id, type: 'entry', uid, e });
       }
     }
     ev.sort((x, y) => x.t - y.t || (x.id < y.id ? -1 : 1));
@@ -180,13 +201,15 @@
         const e = x.e, uid = x.uid;
         const cat = st.cats[e.cat];
         if (!cat) continue;
-        const cnt = (counts[uid][e.cat] || 0) + 1;
+        // 독후감 X(통과 못함)는 0점이고 월 한도에도 세지 않음
+        const failedReport = e.cat === 'reading' && e.ox === 'X';
+        const cnt = (counts[uid][e.cat] || 0) + (failedReport ? 0 : 1);
         counts[uid][e.cat] = cnt;
         // 점수 직접 지정은 선생님 기록(칭찬·감점)만 인정 — 학생 제출은 항상 설정된 배점
         const custom = e.by === 'teacher' && e.points !== undefined && e.points !== null && e.points !== '';
-        let pts = custom ? Number(e.points) : cat.points;
+        let pts = failedReport ? 0 : custom ? Number(e.points) : cat.points;
         let capped = false;
-        if (cat.cap > 0 && cnt > cat.cap) { pts = 0; capped = true; }
+        if (!failedReport && cat.cap > 0 && cnt > cat.cap) { pts = 0; capped = true; }
         R[uid] += pts;
         detail[uid].accum += pts;
         const c = (detail[uid].cats[e.cat] = detail[uid].cats[e.cat] || { count: 0, points: 0, capped: 0 });
@@ -209,7 +232,7 @@
   }
 
   window.Tier = {
-    START, TIER_LIST, KIND_NAMES, MODE_NAMES, GRADES, GRADE_VALUES, GRADE_ALIAS, K_PRESETS, DEFAULT_SETTINGS, DEFAULT_GRADE_BASE, STUDENT_CATS,
+    START, TIER_LIST, KIND_NAMES, MODE_NAMES, GRADES, GRADE_VALUES, GRADE_ALIAS, K_PRESETS, DEFAULT_SETTINGS, DEFAULT_GRADE_BASE, STUDENT_CATS, passRate,
     mergeSettings, monthKey, monthLabel, prevMonth, tierOf, valueOf, eloDeltas, cutDeltas, gradeDeltas, hasCut, gradeBase, compute,
   };
 })();
