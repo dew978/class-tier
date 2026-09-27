@@ -310,6 +310,15 @@
         return uid;
       },
       async signOut() { uid = null; sessionStorage.removeItem(SESSION_KEY); authCbs.forEach((f) => f(null)); },
+      // 데모에서는 Google 로그인을 쓸 수 없음
+      google: false,
+      async signInGoogle() { throw new Error('데모 모드에서는 Google 로그인을 쓸 수 없어요.'); },
+      async linkGoogle() { throw new Error('데모 모드에서는 Google 계정을 연결할 수 없어요.'); },
+      async unlinkGoogle() {},
+      googleEmail: () => null,
+      isGoogleOnly: () => false,
+      hasPassword: () => true,
+      async dropNewGoogleUser() { await api.signOut(); },
       async createAccount(loginId, pw) {
         const a = loadAuth();
         const id = String(loginId).toLowerCase();
@@ -363,6 +372,12 @@
       if (/weak-password/.test(c)) return new Error('비밀번호는 6자 이상이어야 합니다.');
       if (/too-many-requests/.test(c)) return new Error('시도가 너무 많습니다. 잠시 후 다시 시도하세요.');
       if (/network/.test(c)) return new Error('네트워크 오류입니다. 인터넷 연결을 확인하세요.');
+      if (/popup-closed|cancelled-popup/.test(c)) return new Error('Google 로그인 창을 닫았어요.');
+      if (/credential-already-in-use|account-exists/.test(c)) return new Error('이 Google 계정은 이미 다른 계정에 쓰이고 있어요.');
+      if (/provider-already-linked/.test(c)) return new Error('이미 Google 계정이 연결되어 있어요.');
+      if (/operation-not-allowed/.test(c)) return new Error('Firebase에서 Google 로그인이 아직 켜져 있지 않아요.');
+      if (/unauthorized-domain/.test(c)) return new Error('이 주소는 Firebase 승인된 도메인에 없어요.');
+      if (/requires-recent-login/.test(c)) return new Error('보안을 위해 다시 로그인한 뒤 해 주세요.');
       if (/PERMISSION_DENIED|permission/i.test(String(e && e.message))) return new Error('권한이 없습니다. (보안 규칙 확인)');
       return e instanceof Error ? e : new Error(String(e));
     };
@@ -420,6 +435,39 @@
         try { return (await auth.signInWithEmailAndPassword(toEmail(loginId), pw)).user.uid; } catch (e) { throw koErr(e); }
       },
       async signOut() { await auth.signOut(); },
+      // ── Google 로그인 (선생님) ── 팝업이 막히면 페이지 이동 방식으로
+      google: true,
+      async signInGoogle() {
+        const p = new firebase.auth.GoogleAuthProvider();
+        p.setCustomParameters({ prompt: 'select_account' });
+        try {
+          const r = await auth.signInWithPopup(p);
+          return { uid: r.user.uid, isNew: !!(r.additionalUserInfo && r.additionalUserInfo.isNewUser), email: r.user.email };
+        } catch (e) {
+          if (/popup-blocked|operation-not-supported-in-this-environment/.test(e && e.code)) { await auth.signInWithRedirect(p); return null; }
+          throw koErr(e);
+        }
+      },
+      // 지금 로그인한 계정(선생님)에 Google 계정을 연결 → 다음부터 Google로 같은 계정에 들어옴
+      async linkGoogle() {
+        const p = new firebase.auth.GoogleAuthProvider();
+        p.setCustomParameters({ prompt: 'select_account' });
+        try {
+          const r = await auth.currentUser.linkWithPopup(p);
+          const g = r.user.providerData.find((x) => x.providerId === 'google.com');
+          return g ? g.email : '';
+        } catch (e) { throw koErr(e); }
+      },
+      async unlinkGoogle() { try { await auth.currentUser.unlink('google.com'); } catch (e) { throw koErr(e); } },
+      googleEmail() {
+        const u = auth.currentUser;
+        const g = u && u.providerData.find((x) => x.providerId === 'google.com');
+        return g ? g.email : null;
+      },
+      isGoogleOnly() { const u = auth.currentUser; return !!u && u.providerData.length > 0 && u.providerData.every((x) => x.providerId === 'google.com'); },
+      hasPassword() { const u = auth.currentUser; return !!u && u.providerData.some((x) => x.providerId === 'password'); },
+      // Google로 처음 들어와 새로 생긴, 어디에도 연결되지 않은 계정 지우기
+      async dropNewGoogleUser() { try { if (auth.currentUser) await auth.currentUser.delete(); } catch (e) { /* 무시 */ } await auth.signOut(); },
       // 관리자 세션을 유지한 채 보조 앱으로 계정 생성
       async createAccount(loginId, pw) {
         try {

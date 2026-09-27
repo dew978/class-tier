@@ -471,10 +471,61 @@
   /* ───────────── 칭찬·감점 ───────────── */
   let praiseKind = 'praise';
   let svSel = new Set(), svFor = null;
+  // 1인1역 기록: 새 키 svd{한국 날짜 번호}(학생 직접 체크와 같은 키) · 예전 키 sv-YYYY-MM-DD
+  const kdayOfDate = (date) => Math.floor((new Date(`${date}T12:00:00+09:00`).getTime() + 9 * 3600e3) / 864e5);
+  function svEntry(u, date) {
+    const l = ents[u] || {};
+    const k1 = 'svd' + kdayOfDate(date), k2 = 'sv-' + date;
+    if (l[k1]) return { key: k1, e: l[k1] };
+    if (l[k2]) return { key: k2, e: l[k2] };
+    return null;
+  }
+  const jobTitles = (u) => Object.values(S.jobs || {}).filter((j) => j && j.on !== false && j.mem && j.mem[u]).map((j) => j.t);
+  // 저장: 고른 학생 = 인정(새로 만들거나 확인 대기를 승인), 고르지 않은 학생 = 인정 취소·확인 안 함
+  // mode 'pend' = 학생 체크(확인 대기)만 모두 인정
+  async function saveService(mode) {
+    const date = $('#sv-date').value;
+    if (!date) return;
+    const ts = new Date(`${date}T15:00:00`).getTime();
+    const month = T.monthKey(ts);
+    if (isClosed(month)) return toast(`${T.monthLabel(month)}은 마감되었어요.`, 'bad');
+    const upd = {};
+    const now = B.now();
+    let on = 0, ok = 0, no = 0;
+    for (const u of Object.keys(S.users)) {
+      const x = svEntry(u, date);
+      const want = mode === 'pend' ? !!(x && x.e.status === 'pending') || !!(x && x.e.status === 'approved') : svSel.has(u);
+      const base = x && `entries/${u}/${x.key}`;
+      if (want) {
+        on++;
+        if (!x) upd[`entries/${u}/svd${kdayOfDate(date)}`] = { cat: 'service', text: `1인1역·봉사 (${date.slice(5).replace('-', '/')})`, month, ts, by: 'teacher', status: 'approved' };
+        else if (x.e.status !== 'approved') { upd[base + '/status'] = 'approved'; upd[base + '/reviewedAt'] = now; upd[base + '/reason'] = null; ok++; }
+      } else if (x) {
+        if (x.e.status === 'pending') { upd[base + '/status'] = 'rejected'; upd[base + '/reviewedAt'] = now; upd[base + '/reason'] = '1인1역 확인 안 됨'; no++; }
+        else if (x.e.status === 'approved') upd[base] = null;
+      }
+    }
+    if (Object.keys(upd).length) await B.update('', upd);
+    svFor = null;
+    toast(`${date.slice(5).replace('-', '/')} 1인1역·봉사 ${on}명 인정${ok ? ` (학생 체크 ${ok}명 확인)` : ''}${no ? ` · 확인 안 함 ${no}명` : ''}`, 'good');
+  }
+  // 이번 주(월~일) 인정된 1인1역 날 수 — 급여 표에 보여 줌
+  Teacher.svDaysThisWeek = (u) => {
+    const kd = Math.floor((B.now() + 9 * 3600e3) / 864e5);
+    const start = kd - ((kd + 3) % 7);
+    const days = new Set();
+    for (const [k, e] of Object.entries(ents[u] || {})) {
+      if (!e || e.cat !== 'service' || e.status !== 'approved') continue;
+      const d = k.startsWith('svd') ? Number(k.slice(3)) : Math.floor(((e.ts || 0) + 9 * 3600e3) / 864e5);
+      if (d >= start && d <= kd) days.add(d);
+    }
+    return days.size;
+  };
   SK.praise = () => {
     main().innerHTML = `<div class="a-head"><h2>칭찬·감점·1인1역</h2><span class="muted">감점 기록은 본인과 선생님만 봐요</span></div>
-      <div class="panel" style="margin-bottom:16px"><div class="a-head" style="margin:0 0 10px"><h3 style="margin:0">🤝 1인1역·봉사 체크</h3><span class="sp"></span>
-        <input type="date" id="sv-date" style="width:auto"><button class="btn xs ghost" data-sv="all">모두 체크</button><button class="btn xs ghost" data-sv="none">모두 해제</button><button class="btn sm primary" id="sv-save">저장</button></div>
+      <div class="panel" style="margin-bottom:16px"><div class="a-head" style="margin:0 0 10px"><h3 style="margin:0">🤝 1인1역·봉사 체크</h3>
+        <div class="seg" id="sv-mode"><button data-m="teacher">선생님이 체크</button><button data-m="student">학생이 직접 체크 → 확인</button></div><span class="sp"></span>
+        <input type="date" id="sv-date" style="width:auto"><button class="btn xs good hidden" data-sv="pend">학생 체크 모두 확인</button><button class="btn xs ghost" data-sv="all">모두 체크</button><button class="btn xs ghost" data-sv="none">모두 해제</button><button class="btn sm primary" id="sv-save">저장</button></div>
         <div class="stu-grid" id="sv-grid"></div>
         <p class="note" id="sv-note"></p></div>
       <div class="two-col"><div class="panel"><div class="a-head" style="margin-bottom:10px"><h3 style="margin:0">학생 선택</h3><span class="sp"></span>
@@ -495,26 +546,19 @@
     $('#sv-date').value = todayStr(B.now());
     svFor = null;
     $('#sv-date').onchange = () => { svFor = null; RD.praise(); };
-    $('#sv-save').onclick = async () => {
-      const date = $('#sv-date').value;
-      if (!date) return;
-      const ts = new Date(`${date}T15:00:00`).getTime();
-      const month = T.monthKey(ts);
-      if (isClosed(month)) return toast(`${T.monthLabel(month)}은 마감되었어요.`, 'bad');
-      const upd = {};
-      let on = 0;
-      for (const u of Object.keys(S.users)) {
-        const has = !!(ents[u] && ents[u]['sv-' + date]);
-        if (svSel.has(u)) { on++; if (!has) upd[`entries/${u}/sv-${date}`] = { cat: 'service', text: `1인1역·봉사 (${date.slice(5).replace('-', '/')})`, month, ts, by: 'teacher', status: 'approved' }; }
-        else if (has) upd[`entries/${u}/sv-${date}`] = null;
-      }
-      if (Object.keys(upd).length) await B.update('', upd);
-      toast(`${date.slice(5).replace('-', '/')} 1인1역·봉사 ${on}명 저장`, 'good');
+    // 1인1역 체크 방식: 학생이 직접 체크하면 「확인 대기」로 들어오고, 선생님이 저장(또는 모두 확인)하면 인정
+    $('#sv-mode').onclick = async (e) => {
+      const b = e.target.closest('[data-m]');
+      if (!b || A.settings().svMode === b.dataset.m) return;
+      await B.set('config/settings/svMode', b.dataset.m);
+      toast(b.dataset.m === 'student' ? '이제 직업이 있는 학생이 홈 화면에서 「오늘 역할 다 했어요」를 눌러 체크해요.' : '선생님이 날짜별로 체크해요.', 'good');
     };
+    $('#sv-save').onclick = () => saveService(null);
     main().onclick = async (e) => {
       const sv = e.target.closest('[data-svu]');
       if (sv) { svSel.has(sv.dataset.svu) ? svSel.delete(sv.dataset.svu) : svSel.add(sv.dataset.svu); RD.praise(); return; }
       const sa = e.target.closest('[data-sv]');
+      if (sa && sa.dataset.sv === 'pend') return saveService('pend');
       if (sa) { if (sa.dataset.sv === 'all') Object.keys(S.users).forEach((u) => svSel.add(u)); else svSel.clear(); RD.praise(); return; }
       const g = e.target.closest('[data-g]');
       if (g) { sel.has(g.dataset.g) ? sel.delete(g.dataset.g) : sel.add(g.dataset.g); RD.praise(); return; }
@@ -548,15 +592,27 @@
   RD.praise = () => {
     const m = A.curMonth();
     const r = computeMonth(m);
+    const st = A.settings();
     const ids = Object.keys(S.users).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
     const date = $('#sv-date').value;
-    if (svFor !== date) { svFor = date; svSel = new Set(ids.filter((u) => ents[u] && ents[u]['sv-' + date])); }
-    const saved = new Set(ids.filter((u) => ents[u] && ents[u]['sv-' + date]));
-    const dirty = ids.some((u) => saved.has(u) !== svSel.has(u));
-    $('#sv-grid').innerHTML = ids.map((u) => `<button data-svu="${u}" class="${svSel.has(u) ? 'sel' : ''}"><span class="nm">${svSel.has(u) ? '✅ ' : ''}${esc(nameOf(u))}</span>
-      <span class="sub">이번 달 ${r.detail[u] && r.detail[u].cats.service ? r.detail[u].cats.service.count : 0}회</span></button>`).join('') || '<p class="empty">학생이 없어요</p>';
-    const c = A.settings().cats.service;
-    $('#sv-note').innerHTML = `체크한 학생에게 ${signed(c.points)}점 (하루 1번${c.cap ? `, 월 ${c.cap}회까지` : ''}) · 저장된 ${saved.size}명${dirty ? ' · <b style="color:var(--warn)">저장하지 않은 변경이 있어요</b>' : ''}`;
+    const stat = (u) => { const x = svEntry(u, date); return x ? x.e.status : ''; };
+    // 날짜를 바꾸면: 인정된 학생 + (학생 직접 체크 방식이면) 확인 대기 학생을 선택한 상태로 시작
+    if (svFor !== date) { svFor = date; svSel = new Set(ids.filter((u) => stat(u) === 'approved' || stat(u) === 'pending')); }
+    const saved = new Set(ids.filter((u) => stat(u) === 'approved'));
+    const pend = ids.filter((u) => stat(u) === 'pending');
+    const dirty = ids.some((u) => (stat(u) === 'approved') !== svSel.has(u) || (stat(u) === 'pending'));
+    $$('#sv-mode button').forEach((b) => b.classList.toggle('on', b.dataset.m === st.svMode));
+    $('[data-sv="pend"]').classList.toggle('hidden', !pend.length);
+    $('#sv-grid').innerHTML = ids.map((u) => {
+      const s = stat(u);
+      const jobs = jobTitles(u);
+      return `<button data-svu="${u}" class="${svSel.has(u) ? 'sel' : ''} ${s === 'pending' ? 'pend' : ''}"><span class="nm">${svSel.has(u) ? '✅ ' : ''}${esc(nameOf(u))}</span>
+        ${jobs.length ? `<span class="job">💼 ${esc(jobs.join(', '))}</span>` : ''}
+        <span class="sub">${s === 'pending' ? '🕒 학생 체크 · 확인 대기' : s === 'rejected' ? '확인 안 함' : `이번 달 ${r.detail[u] && r.detail[u].cats.service ? r.detail[u].cats.service.count : 0}회`}</span></button>`;
+    }).join('') || '<p class="empty">학생이 없어요</p>';
+    const c = st.cats.service;
+    $('#sv-note').innerHTML = `${st.svMode === 'student' ? '직업이 있는 학생이 홈 화면에서 「오늘 역할 다 했어요」를 누르면 여기 「확인 대기」로 보여요. 확인할 학생을 고른 채 저장하면 인정되고, 고르지 않은 학생의 체크는 「확인 안 함」이 돼요.<br>' : ''}
+      체크한 학생에게 ${signed(c.points)}점 (하루 1번${c.cap ? `, 월 ${c.cap}회까지` : ''}) · 인정 ${saved.size}명${pend.length ? ` · 확인 대기 ${pend.length}명` : ''}${dirty ? ' · <b style="color:var(--warn)">저장하지 않은 변경이 있어요</b>' : ''}`;
     $('#pr-grid').innerHTML = ids.map((u) => {
       const c = r.detail[u] && r.detail[u].cats;
       return `<button data-g="${u}" class="${sel.has(u) ? 'sel' : ''}"><span class="nm">${esc(nameOf(u))}</span>
@@ -842,7 +898,7 @@
       <div class="two-col"><div class="col" style="gap:16px">
         <div class="panel"><h3>생활 점수 항목</h3><p class="note" style="margin-top:0">월 한도 0 = 무제한. 한도를 넘은 기록은 0점으로 반영돼요.</p>
           <table class="tbl"><thead><tr><th>항목</th><th>입력</th><th>1건 점수</th><th>월 한도(회)</th></tr></thead><tbody>
-          ${Object.entries(st.cats).map(([k, c]) => `<tr><td><input data-cn="${k}" value="${esc(c.name)}"></td><td>${{ teacher: '선생님', student: '학생→승인', system: '자동(앱 채점)' }[c.who] || ''}</td>
+          ${Object.entries(st.cats).map(([k, c]) => `<tr><td><input data-cn="${k}" value="${esc(c.name)}"></td><td>${k === 'service' && st.svMode === 'student' ? '학생 체크→확인' : { teacher: '선생님', student: '학생→승인', system: '자동(앱 채점)' }[c.who] || ''}</td>
             <td><input data-cp="${k}" type="number" value="${c.points}" style="width:90px"></td><td><input data-cc="${k}" type="number" min="0" value="${c.cap}" style="width:90px"></td></tr>`).join('')}
           </tbody></table></div>
         <div class="panel"><h3>🀄 한자 학습</h3><p class="note" style="margin-top:0">가정 학습은 인정하지 않아요 — 아래 요일·시간에만 학습과 승급 시험이 열려요.</p>
@@ -860,9 +916,14 @@
       </div><div class="col" style="gap:16px">
         <div class="panel"><h3>반 정보</h3><label>반 이름<input id="ci-class" value="${esc(S.className)}"></label><label>선생님 표시 이름<input id="ci-teacher" value="${esc(S.teacherName)}"></label>
           <div class="foot"><button class="btn" id="ci-save">저장</button></div></div>
-        <div class="panel"><h3>선생님 계정</h3><label>현재 비밀번호<input id="tp-old" type="password"></label><label>새 비밀번호 (6자 이상)<input id="tp-new" type="password"></label>
-          <div class="foot"><button class="btn" id="tp-go">비밀번호 변경</button></div>
-          ${B.mode === 'demo' ? '<p class="note">데모 모드입니다.</p><button class="btn danger sm" id="demo-reset2">데모 데이터 초기화</button>' : ''}</div>
+        <div class="panel" id="acct-panel"><h3>선생님 계정</h3>
+          ${B.google ? `<div class="g-link"><svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+            <div><b>Google 계정</b><div class="muted">${B.googleEmail() ? `${esc(B.googleEmail())} · 연결됨` : '연결 안 됨'}</div></div><span class="sp"></span>
+            ${B.googleEmail() ? (B.hasPassword() ? '<button class="btn sm ghost" id="g-unlink">연결 끊기</button>' : '') : '<button class="btn sm primary" id="g-link">Google 계정 연결</button>'}</div>
+            <p class="note">연결하면 어느 기기에서든 로그인 화면의 「Google 계정으로 로그인」으로 이 선생님 계정에 들어올 수 있어요.</p>` : ''}
+          ${B.hasPassword() ? `<label>현재 비밀번호<input id="tp-old" type="password"></label><label>새 비밀번호 (6자 이상)<input id="tp-new" type="password"></label>
+          <div class="foot"><button class="btn" id="tp-go">비밀번호 변경</button></div>` : '<p class="note">Google 계정으로 만든 선생님 계정이에요 (비밀번호 없음).</p>'}
+          ${B.mode === 'demo' ? '<p class="note">데모 모드입니다. (Google 로그인은 실제 사이트에서만 돼요)</p><button class="btn danger sm" id="demo-reset2">데모 데이터 초기화</button>' : ''}</div>
       </div></div>`;
     // 문항 수에 따라 통과 기준 표시
     const showRate = () => $$('[data-htc]').forEach((i) => {
@@ -900,9 +961,22 @@
       await B.update('config', { className: $('#ci-class').value.trim(), teacherName: $('#ci-teacher').value.trim() || '선생님' });
       toast('저장했어요.', 'good');
     };
-    $('#tp-go').onclick = async () => {
+    const tp = $('#tp-go');
+    if (tp) tp.onclick = async () => {
       try { await B.setPassword('teacher', $('#tp-old').value, $('#tp-new').value); toast('비밀번호를 변경했어요.', 'good'); $('#tp-old').value = $('#tp-new').value = ''; }
       catch (err) { toast(err.message, 'bad'); }
+    };
+    const redraw = () => { main().dataset.tab = ''; A.render(); };
+    const gl = $('#g-link');
+    if (gl) gl.onclick = async () => {
+      gl.disabled = true;
+      try { const em = await B.linkGoogle(); toast(`${em} 계정을 연결했어요. 이제 Google 계정으로 로그인할 수 있어요.`, 'good'); redraw(); }
+      catch (err) { gl.disabled = false; toast(err.message, 'bad'); }
+    };
+    const gu = $('#g-unlink');
+    if (gu) gu.onclick = async () => {
+      if (!(await confirmBox('Google 연결 끊기', '연결을 끊으면 Google로는 로그인할 수 없고, 아이디(teacher)와 비밀번호로만 들어올 수 있어요.', '연결 끊기', true))) return;
+      try { await B.unlinkGoogle(); toast('연결을 끊었어요.'); redraw(); } catch (err) { toast(err.message, 'bad'); }
     };
     const dr = $('#demo-reset2');
     if (dr) dr.onclick = async () => { if (await confirmBox('데모 초기화', '모든 데모 데이터를 지울까요?', '초기화', true)) { B.resetDemo(); location.reload(); } };

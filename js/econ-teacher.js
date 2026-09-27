@@ -495,9 +495,11 @@
     if (focused) { drawPayTotals(); return; }
     const c = E.cfg();
     const rows = payRows();
-    el.innerHTML = `<h3>💰 급여 보내기 <span class="muted">급수 수당 = 타자·리코더 급수표의 「주급 추가」</span></h3>
-      <div class="tbl-wrap"><table class="tbl pay-tbl"><thead><tr><th></th><th>학생</th><th>직업</th><th class="num">기본급</th><th class="num">급수 수당</th><th class="num">추가</th><th class="num">세전</th><th class="num">소득세 ${c.tax}%</th><th class="num">받는 돈</th></tr></thead><tbody>
+    const svd = (u) => (TC.svDaysThisWeek ? TC.svDaysThisWeek(u) : 0);
+    el.innerHTML = `<h3>💰 급여 보내기 <span class="muted">급수 수당 = 타자·리코더 급수표의 「주급 추가」 · 1인1역 = 이번 주(월~일) 인정된 날 · 「추가」에 −를 넣으면 깎여요</span></h3>
+      <div class="tbl-wrap"><table class="tbl pay-tbl"><thead><tr><th></th><th>학생</th><th>직업</th><th class="num">1인1역</th><th class="num">기본급</th><th class="num">급수 수당</th><th class="num">추가</th><th class="num">세전</th><th class="num">소득세 ${c.tax}%</th><th class="num">받는 돈</th></tr></thead><tbody>
       ${rows.map((r) => `<tr class="${r.g ? '' : 'off'}"><td><input type="checkbox" class="chk" data-payon="${r.u}" ${payOff.has(r.u) || !r.g ? '' : 'checked'} ${r.g ? '' : 'disabled'}></td><td>${esc(nameOf(r.u))}</td><td class="muted">${esc(r.js.map((j) => j.t).join(', ') || '-')}</td>
+        <td class="num">${r.js.length ? `${svd(r.u)}일` : '-'}</td>
         <td class="num">${E.num(r.base)}</td><td class="num">${r.bonus ? E.num(r.bonus) : '-'}</td><td class="num"><input type="number" step="10000" data-extra="${r.u}" value="${payExtra[r.u] || ''}" placeholder="0" style="width:95px"></td>
         <td class="num" data-pg="${r.u}">${E.num(r.g)}</td><td class="num" data-px="${r.u}">${E.num(r.x)}</td><td class="num"><b data-pn="${r.u}">${E.num(r.g - r.x)}</b></td></tr>`).join('')}
       </tbody></table></div>

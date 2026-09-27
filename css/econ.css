@@ -36,6 +36,24 @@ tr.hl td { background: rgba(255, 181, 71, .07); }
 .switch input:checked + i { background: var(--good); }
 .switch input:checked + i::after { transform: translateX(18px); background: #fff; }
 
+/* ── 로그인: Google · 앱 설치 ── */
+.or-line { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: .85em; margin: 16px 0 10px; }
+.or-line::before, .or-line::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.btn.google { width: 100%; background: #fff; color: #1f1f1f; border-color: #dadce0; display: inline-flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; }
+.btn.google:hover { background: #f5f7fb; }
+.g-logo { width: 20px; height: 20px; flex: none; }
+.auth-card .install-btn { margin-top: 14px; width: auto; }
+.sv-card, .install-card { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.sv-card .wc-ic, .install-card .wc-ic { font-size: 2em; }
+.sv-card b { font-size: 1.15em; }
+.sv-card .sp, .install-card .sp { flex: 1; }
+.sv-card .pill + .btn { margin-left: 6px; }
+.stu-grid button.pend { border-color: var(--warn); background: #2e2614; }
+.g-link { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; background: #10183a; border: 1px solid var(--line); }
+.g-link .g-logo { width: 26px; height: 26px; }
+.g-link .sp { flex: 1; }
+.stu-grid .job { font-size: .75em; color: var(--c-gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* ── 아바타 ── */
 .av { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; overflow: hidden; flex: none;
   background: linear-gradient(145deg, #2c3a6e, #1c2548); border: 2px solid #33406e; }

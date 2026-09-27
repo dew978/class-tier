@@ -381,7 +381,7 @@
     const c = E.cfg();
     const list = Object.entries(S.jobs || {}).filter(([, j]) => j && j.on !== false).sort((a, b) => (a[1].ord ?? 999) - (b[1].ord ?? 999) || (b[1].w || 0) - (a[1].w || 0));
     const mine = myJobs();
-    return `<div class="panel"><h3>💼 우리 반 직업 <span class="muted">급여에서 소득세 ${c.tax}%를 떼어 국고에 모아요</span></h3>
+    return `${A.svCard ? A.svCard().replace('style="margin-top:16px"', 'style="margin-bottom:16px"') : ''}<div class="panel"><h3>💼 우리 반 직업 <span class="muted">급여에서 소득세 ${c.tax}%를 떼어 국고에 모아요</span></h3>
       ${mine.length ? `<div class="my-jobs">나의 직업: ${mine.map(([, j]) => `<span class="pill good">${esc(j.t)}</span>`).join(' ')}</div>` : ''}
       ${payPreview(mine)}
       ${list.length ? `<div class="job-grid">${list.map(([, j]) => {

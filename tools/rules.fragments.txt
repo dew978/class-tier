@@ -316,7 +316,9 @@ root.child('btopic/' + $bid + '/' + $tid)
  && ((newData.child('cat').val() === 'reading' && (newData.child('ox').val() === 'O' || newData.child('ox').val() === 'X'))
   || newData.child('cat').val() === 'homework'
   || (newData.child('cat').val() === 'unit' && root.child('openUnits/' + newData.child('aid').val()).exists() && newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('score').val() <= 100)
-  || ((newData.child('cat').val() === 'lvTyping' || newData.child('cat').val() === 'lvRecorder') && newData.child('level').isNumber())))
+  || ((newData.child('cat').val() === 'lvTyping' || newData.child('cat').val() === 'lvRecorder') && newData.child('level').isNumber())
+  || (newData.child('cat').val() === 'service' && $eid === 'svd' + {{KDAY}} && root.child('config/settings/svMode').val() === 'student'
+      && newData.child('ts').val() <= now + 60000 && newData.child('ts').val() >= now - 600000)))
 @ENTRY_SYSTEM
 (!data.exists() && newData.child('by').val() === 'system' && newData.child('status').val() === 'approved'
  && newData.child('ts').val() <= now + 60000 && newData.child('ts').val() >= now - 600000

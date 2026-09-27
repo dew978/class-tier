@@ -118,6 +118,7 @@
   async function boot() {
     try { await B.init(); } catch (e) { $('#loading-msg').textContent = e.message; return; }
     if (B.mode === 'demo') $('#demo-note').classList.remove('hidden');
+    if (B.google) $$('.google-only').forEach((x) => x.classList.remove('hidden'));
     $('#login-logo').innerHTML = emblem('champion');
     $('#setup-logo').innerHTML = emblem('gold');
     B.onAuth(async (uid) => {
@@ -167,18 +168,53 @@
       $('#setup-err').textContent = err.message;
     }
   });
+  // Google 계정으로 선생님 로그인 (선생님 계정에 연결된 Google 계정만)
+  $('#login-google').addEventListener('click', async (e) => {
+    $('#login-err').textContent = '';
+    e.currentTarget.disabled = true;
+    try { await B.signInGoogle(); } catch (err) { $('#login-err').textContent = err.message; }
+    e.currentTarget.disabled = false;
+  });
+  // 새 반: Google 계정으로 선생님 계정 만들기
+  $('#setup-google').addEventListener('click', async () => {
+    const cls = $('#setup-class').value.trim();
+    $('#setup-err').textContent = '';
+    if (!cls) { $('#setup-err').textContent = '반 이름을 먼저 적어 주세요.'; return; }
+    S.settingUp = true;
+    try {
+      const r = await B.signInGoogle();
+      if (!r) return;
+      const t = await B.tx('config/teacher', (cur) => (cur ? undefined : r.uid));
+      if (!t.committed) { await B.dropNewGoogleUser(); throw new Error('이미 선생님 계정이 있습니다.'); }
+      await B.set('config/className', cls);
+      await B.set('config/teacherName', $('#setup-name').value.trim() || '선생님');
+      S.settingUp = false;
+      await startSession(r.uid);
+    } catch (err) {
+      S.settingUp = false;
+      $('#setup-err').textContent = err.message;
+    }
+  });
 
   async function startSession(uid) {
     S.uid = uid;
-    try {
-      S.teacherUid = await B.get('config/teacher');
-      S.isTeacher = uid === S.teacherUid;
-      if (!S.isTeacher && !(await B.get('users/' + uid))) throw new Error('등록되지 않은 계정입니다. 선생님께 문의하세요.');
-    } catch (err) {
-      await B.signOut();
+    const fail = async (msg, dropGoogle) => {
+      if (dropGoogle) await B.dropNewGoogleUser(); else await B.signOut();
       show('login');
-      $('#login-err').textContent = err.message;
-      return;
+      $('#login-err').textContent = msg;
+    };
+    try { S.teacherUid = await B.get('config/teacher'); }
+    catch (err) { return fail(err.message, false); }
+    S.isTeacher = uid === S.teacherUid;
+    if (!S.isTeacher) {
+      let me = null;
+      try { me = await B.get('users/' + uid); }
+      catch (err) { if (!/권한/.test(err.message)) return fail(err.message, false); }
+      // 선생님도 학생도 아닌 계정: Google로 새로 생긴 계정이면 지워서 나중에 연결할 수 있게 함
+      if (!me) {
+        const google = B.isGoogleOnly && B.isGoogleOnly();
+        return fail(google ? '이 Google 계정은 선생님 계정과 연결되어 있지 않아요. 선생님 아이디로 로그인해 「관리 → 티어 설정 → 선생님 계정」에서 Google 계정을 먼저 연결해 주세요.' : '등록되지 않은 계정입니다. 선생님께 문의하세요.', google);
+      }
     }
     const sub = (p, f) => S.subs.push(B.on(p, f));
     sub('config/className', (v) => { S.className = v || ''; render(); });
@@ -352,7 +388,9 @@
         </div>
         ${last}
       </div>
+      ${svCard()}
       ${window.EconStudent ? window.EconStudent.homeCard() : ''}
+      ${installCard()}
       <div class="grid3" style="margin-top:16px">
         <div class="stat"><div class="k">경쟁 활동 (수행평가·대회)</div><div class="v ${d && d.comp > 0 ? 'up' : d && d.comp < 0 ? 'down' : ''}">${d ? signed(d.comp) : 0}</div></div>
         <div class="stat"><div class="k">생활 점수 (칭찬·독서·과제·역할)</div><div class="v ${d && d.accum > 0 ? 'up' : d && d.accum < 0 ? 'down' : ''}">${d ? signed(d.accum) : 0}</div></div>
@@ -553,9 +591,73 @@
     }).join('')}</div></div>`;
   }
 
+  /* ───────────── 1인1역 = 직업: 학생이 오늘 역할을 스스로 체크 → 선생님 확인 ───────────── */
+  // 기록 키: svd{한국 날짜 번호} — 선생님 체크와 같은 키라 하루에 한 번만 인정
+  const svKey = (t) => 'svd' + Math.floor((t + 9 * 3600e3) / 864e5);
+  const myJobTitles = () => Object.values(S.jobs || {}).filter((j) => j && j.on !== false && j.mem && j.mem[S.uid]).map((j) => j.t);
+  function svCard() {
+    if (settings().svMode !== 'student' || S.isTeacher) return '';
+    const jobs = myJobTitles();
+    if (!jobs.length) return '';
+    const e = S.myEntries[svKey(B.now())];
+    const closed = !!(S.seasons[curMonth()] && S.seasons[curMonth()].closedAt);
+    let right;
+    if (e && e.status === 'approved') right = '<span class="pill good">✅ 선생님이 확인했어요</span>';
+    else if (e && e.status === 'pending') right = '<span class="pill warn">🕒 선생님 확인 기다리는 중</span><button class="btn xs ghost" data-svcancel="1">취소</button>';
+    else if (e) right = `<span class="pill">선생님께 말씀드려요${e.reason ? ` (${esc(e.reason)})` : ''}</span>`;
+    else right = closed ? '<span class="muted">이번 달은 마감되었어요</span>' : '<button class="btn primary" data-svdo="1">🤝 오늘 역할 다 했어요!</button>';
+    return `<div class="panel sv-card" style="margin-top:16px"><span class="wc-ic">🤝</span><div><div class="muted">오늘의 1인1역</div><b>${jobs.map(esc).join(', ')}</b></div><span class="sp"></span>${right}</div>`;
+  }
+  document.addEventListener('click', async (e) => {
+    if (S.screen !== 'student') return;
+    const d = e.target.closest('[data-svdo]');
+    if (d) {
+      d.disabled = true;
+      try {
+        await B.set(`entries/${S.uid}/${svKey(B.now())}`, { cat: 'service', text: `1인1역: ${myJobTitles().join(', ')}`, month: curMonth(), ts: B.now(), by: 'student', status: 'pending' });
+        toast('잘했어요! 선생님이 확인하면 1인1역 점수를 받아요.', 'good');
+      } catch (err) { d.disabled = false; toast(/권한/.test(err.message) ? '지금은 체크할 수 없어요. 선생님께 말씀드려요.' : err.message, 'bad'); }
+      return;
+    }
+    if (e.target.closest('[data-svcancel]')) await B.remove(`entries/${S.uid}/${svKey(B.now())}`).catch((err) => toast(err.message, 'bad'));
+  });
+
+  /* ───────────── 앱으로 설치 (홈 화면·바탕화면 아이콘) ───────────── */
+  let installEvt = null;
+  const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const canInstall = () => !standalone() && (!!installEvt || isIOS());
+  function syncInstall() { $$('[data-install]').forEach((b) => b.classList.toggle('hidden', !canInstall())); }
+  function installCard() {
+    if (!canInstall()) return '';
+    return `<div class="panel install-card" style="margin-top:16px"><span class="wc-ic">📲</span><div><b>앱으로 설치하기</b><div class="muted" style="font-size:.88em">태블릿 바탕화면에 아이콘이 생겨서 바로 열 수 있어요</div></div><span class="sp"></span><button class="btn primary sm" data-install="1">설치</button></div>`;
+  }
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; syncInstall(); render(); });
+  window.addEventListener('appinstalled', () => { installEvt = null; syncInstall(); render(); toast('설치했어요! 바탕화면의 「클래스 티어」 아이콘으로 열 수 있어요.', 'good'); });
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-install]');
+    if (!b) return;
+    if (installEvt) {
+      installEvt.prompt();
+      try { await installEvt.userChoice; } catch (err) { /* 무시 */ }
+      installEvt = null;
+      syncInstall();
+      render();
+    } else {
+      modal(`<h3>📲 홈 화면에 추가하기</h3><ol class="note" style="font-size:1em;line-height:1.9;padding-left:1.2em">
+        <li>Safari 아래(또는 위)의 <b>공유 버튼</b>(네모에서 화살표가 나온 모양)을 눌러요.</li>
+        <li><b>홈 화면에 추가</b>를 눌러요.</li><li>오른쪽 위 <b>추가</b>를 누르면 바탕화면에 아이콘이 생겨요.</li></ol>
+        <p class="note">크롬에서는 주소창 오른쪽의 설치 아이콘이나 메뉴(⋮) → <b>앱 설치</b>(홈 화면에 추가)를 눌러요.</p>
+        <div class="foot"><button class="btn" data-close>알겠어요</button></div>`);
+    }
+  });
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch((e) => console.info('[앱 설치] 서비스 워커 등록 실패', e)));
+  }
+
   window.App = {
     S, B, T, $, $$, esc, emblem, tierChip, tierName, nameTag, nameOf, badgeTier, liveTier, lastSeasonKey,
-    toast, modal, confirmBox, fmtDate, fmtTime, signed, settings, curMonth, render, show, logout, go,
+    toast, modal, confirmBox, fmtDate, fmtTime, signed, settings, curMonth, render, show, logout, go, svCard, svKey, syncInstall,
   };
-  window.addEventListener('DOMContentLoaded', boot);
+  window.addEventListener('DOMContentLoaded', () => { syncInstall(); boot(); });
 })();

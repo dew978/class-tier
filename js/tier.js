@@ -44,6 +44,8 @@
     // 한자: 학교에서만 학습(요일·시간), 승급 시험 문항 수(단계별)
     hanja: { days: [1, 2, 3, 4, 5], start: '08:30', end: '16:30', testCount: [20, 20, 20], daily: 5 },
     showScores: true,
+    // 1인1역 체크: teacher = 선생님이 날짜별로 체크 / student = 학생이 직업(역할)을 스스로 체크 → 선생님 확인
+    svMode: 'teacher',
     rewards: { champion: '', diamond: '', platinum: '', gold: '', silver: '', bronze: '' },
     // 월 마감 때 티어별로 보내는 보상금 (학급 경제)
     rewardMoney: { champion: 0, diamond: 0, platinum: 0, gold: 0, silver: 0, bronze: 0 },
@@ -64,6 +66,7 @@
     if (raw.rewards) Object.assign(s.rewards, raw.rewards);
     if (raw.rewardMoney) for (const k of Object.keys(s.rewardMoney)) s.rewardMoney[k] = Math.max(0, Math.round(Number(raw.rewardMoney[k]) || 0));
     if (typeof raw.showScores === 'boolean') s.showScores = raw.showScores;
+    if (raw.svMode === 'student' || raw.svMode === 'teacher') s.svMode = raw.svMode;
     return s;
   }
 
