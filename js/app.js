@@ -405,17 +405,14 @@
           return `<div class="stat"><div class="k">${esc(t.ic)} ${esc(t.name)}</div><div class="v" style="font-size:1.3em">${esc(window.Tracks.levelName(tk, cur))}</div>
             <div class="muted" style="font-size:.8em;margin-top:4px">${cur < t.levels.length ? `다음: ${esc(t.levels[cur].name)}` : '최고 급수!'}</div></div>`;
         }).join('')}</div></div>
-      <div class="panel" style="margin-top:16px"><h3>📘 티어는 이렇게 정해져요</h3>
+      <div class="panel" style="margin-top:16px"><h3>📘 티어 제도 설명</h3>
+        <div class="note">· 매달 1일, 모두 <b>1000점</b>에서 새로 시작, 매달 마지막 날 마감 후 티어 보상 확정</div>
+        <h4>점수 반영 항목</h4>
         <div class="note">
-          · 매달 1일, 모두 <b>1000점</b>에서 새로 시작해요. 월말에 선생님이 마감하면 그달 티어와 보상이 확정돼요.<br>
-          · <b>수행평가·학급 대회</b>는 반 친구들과 결과를 비교해 점수가 오르내려요. 나보다 점수가 높은 친구보다 잘하면 더 많이 올라요.
-            기준 점수가 있는 활동은 기준보다 잘하면 오르고, 못하면 내려가요.<br>
-          · <b>등급 평가</b>는 ${T.GRADES.map((g) => `${g} ${st.gradePct[g] > 0 ? '+' : ''}${st.gradePct[g]}%`).join(' · ')} (활동의 기준 점수 기준)<br>
-          · <b>단원평가</b>는 「기록하기」에서 내 점수를 입력하면 선생님이 확인해요.<br>
-          · <b>칭찬, 독후감, 과제, 1인1역·봉사, 한자 매일 학습</b>은 할수록 점수가 쌓여요.<br>
-          · <b>${[...window.Tracks.ids(), 'hanja'].map((tk) => esc(window.Tracks.TRACKS[tk].name)).join('·')} 급수</b>가 오르면 점수를 받아요 (한 달에 종목별 1번까지)<br>
-          · 티어: 브론즈 ~${th.silver - 1} · 실버 ${th.silver}~ · 골드 ${th.gold}~ · 플래티넘 ${th.platinum}~ · 다이아 ${th.diamond}~ · <b>챔피언 = 그달 1위</b><br>
-          · 이름 앞 엠블럼은 <b>지난달 확정 티어</b>예요.
+          · 수행평가·학급 대회·단원평가 결과<br>
+          · 칭찬, 독후감, 과제, 1인1역·봉사, 한자 매일 학습<br>
+          · ${[...window.Tracks.ids(), 'hanja'].map((tk) => esc(window.Tracks.TRACKS[tk].name)).join('·')} 급수 (한 달에 종목별 1회)<br>
+          · 티어: 브론즈 ~${th.silver - 1} · 실버 ${th.silver}~ · 골드 ${th.gold}~ · 플래티넘 ${th.platinum}~ · 다이아 ${th.diamond}~ · <b>챔피언 = 1위</b>
         </div></div>`;
   }
 
