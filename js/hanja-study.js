@@ -20,6 +20,9 @@
   const addDays = (n) => dayStr(B.now() + n * 86400000);
   const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const huneum = (x) => `${x.hun} ${x.eum}`;
+  const plainMean = (m) => m.replace(/\s*\([^)]*읽어요\)/, '');
+  // 한자어 목록: 배우는 한자를 강조하고 읽기·뜻을 함께 보여줌 (문해력)
+  const wordList = (x) => `<div class="hj-words">${x.words.map((w) => `<div><b>${[...w.word].map((c) => (c === x.h ? `<em>${esc(c)}</em>` : esc(c))).join('')}</b><span class="rd">${esc(w.read)}</span><span class="mn">${esc(w.mean)}</span></div>`).join('')}</div>`;
   const prog = () => Object.assign({ learned: 0, level: 0, review: {} }, S.hanja || {});
 
   function windowInfo() {
@@ -66,7 +69,7 @@
 
   /* ───── 문제 만들기 ───── */
   function makeQuestion(x, learnedSet) {
-    const types = ['hun', 'char'];
+    const types = ['hun', 'char', 'meaning'];
     const words = x.words.filter((w) => [...w.word].every((c) => learnedSet.has(c)));
     if (words.length) types.push('word');
     const type = types[Math.floor(Math.random() * types.length)];
@@ -79,6 +82,15 @@
     if (type === 'char') {
       const opts = [x.h, ...others.slice(0, 3).map((y) => y.h)];
       return { type, x, prompt: '뜻과 소리에 맞는 한자는?', show: huneum(x), opts: shuffle(opts), answer: x.h };
+    }
+    if (type === 'meaning') {
+      // 뜻풀이를 보고 알맞은 낱말 고르기 (보기: 읽기 + 한자)
+      const w = x.words[Math.floor(Math.random() * x.words.length)];
+      const label = (ww) => `${ww.read} ${ww.word}`;
+      const opts = [label(w)];
+      // 뜻이 같은 다른 낱말(예: 인간·인물 = 사람)은 보기에서 제외
+      for (const y of others) for (const ww of y.words) { if (opts.length >= 4) break; if (ww.read !== w.read && plainMean(ww.mean) !== plainMean(w.mean) && !opts.includes(label(ww))) opts.push(label(ww)); }
+      return { type, x, prompt: '다음 뜻을 가진 낱말은?', show: plainMean(w.mean), opts: shuffle(opts), answer: label(w) };
     }
     const w = words[Math.floor(Math.random() * words.length)];
     const reads = [w.read];
@@ -162,7 +174,7 @@
     const x = H.BY[ch];
     const m = A.modal(`<div class="hj-card"><div class="hj-glyph" id="hv-g"></div>
       <div class="hj-info"><div class="muted">${x.levelName}</div><div class="hun">${esc(huneum(x))}</div>
-      <div class="words">${x.words.map((w) => `<span><b>${esc(w.word)}</b>${esc(w.read)}</span>`).join('')}</div>
+      ${wordList(x)}
       <div class="foot" style="justify-content:flex-start"><button class="btn sm" id="hv-a">획순 다시 보기</button><button class="btn sm" id="hv-q">따라 쓰기</button></div></div></div>
       <div class="foot"><button class="btn" data-close>닫기</button></div>`, { wide: true });
     const g = m.el.querySelector('#hv-g');
@@ -224,7 +236,7 @@
     main.innerHTML = `<div class="panel">${header(`📖 새 한자 ${HS.i + 1} / ${HS.cards.length}`, HS.i, HS.cards.length + HS.qs.length)}
       <div class="hj-card"><div class="hj-glyph" id="hs-g"></div>
         <div class="hj-info"><div class="muted">${x.levelName}</div><div class="hun">${esc(huneum(x))}</div>
-          <div class="words">${x.words.map((w) => `<span><b>${esc(w.word)}</b>${esc(w.read)}</span>`).join('')}</div>
+          ${wordList(x)}
           <div class="foot" style="justify-content:flex-start"><button class="btn sm" id="hs-a">🔁 획순 다시 보기</button><button class="btn sm" id="hs-q">✍️ 따라 쓰기</button></div>
         </div></div>
       <div class="foot"><button class="btn primary lg" id="hs-next">${HS.i + 1 < HS.cards.length ? '다음 한자 →' : '퀴즈 풀기 →'}</button></div></div>`;
@@ -241,7 +253,7 @@
     const doneBefore = HS.mode === 'study' ? HS.cards.length : 0;
     const hanOpts = q.type === 'char';
     main.innerHTML = `<div class="panel">${header(test ? `🏅 승급 시험 ${HS.i + 1} / ${HS.qs.length}` : `✏️ 퀴즈 ${HS.i + 1} / ${HS.qs.length}`, doneBefore + HS.i, doneBefore + HS.qs.length)}
-      <div class="hj-q"><div class="prompt">${esc(q.prompt)}</div><div class="big ${q.type === 'char' ? 'txt' : ''}">${esc(q.show)}</div>
+      <div class="hj-q"><div class="prompt">${esc(q.prompt)}</div><div class="big ${q.type === 'char' ? 'txt' : q.type === 'meaning' ? 'mean' : ''}">${esc(q.show)}</div>
         <div class="hj-opts">${q.opts.map((o) => `<button class="${hanOpts ? 'han' : ''}" data-o="${esc(o)}">${esc(o)}</button>`).join('')}</div></div></div>`;
     bindQuit();
     let answered = false;
