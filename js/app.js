@@ -95,6 +95,8 @@
   function show(name) {
     $$('.screen').forEach((s) => s.classList.add('hidden'));
     $('#scr-' + name).classList.remove('hidden');
+    // 학생 화면은 태블릿용으로 글자·메뉴를 크게
+    document.body.classList.toggle('student-mode', name === 'student');
     S.screen = name;
     render();
   }

@@ -10,6 +10,38 @@
   .topbar .brand-txt { display: none; }
   .tabs.secs { order: 5; flex-basis: 100%; margin-left: 0; }
 }
+/* ── 학생 화면: 태블릿에서 보기 쉽게 글자·메뉴를 크게 (선생님 PC 화면은 그대로) ── */
+body.student-mode { font-size: 18px; }
+body.student-mode #scr-student .topbar { padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: 12px; gap: 12px; }
+body.student-mode #scr-student .brand { font-size: 1.15em; }
+body.student-mode #scr-student .brand .emb { width: 28px; height: 28px; }
+body.student-mode #scr-student .tabs.secs { gap: 8px; }
+body.student-mode #scr-student .tabs.secs button { font-size: 1.12em; padding: .55em 1.1em; min-height: 54px; border-radius: 14px; background: #10183a; border: 1px solid var(--line); color: var(--text); }
+body.student-mode #scr-student .tabs.secs button.on { background: linear-gradient(135deg, var(--accent), var(--accent2)); border-color: transparent; color: #fff; }
+body.student-mode #scr-student .top-me .ntag { font-size: 1.05em; }
+body.student-mode #scr-student .topbar > .btn { font-size: .95em; padding: .55em 1em; min-height: 44px; }
+body.student-mode #scr-student .subtabs { gap: 8px; padding-top: 14px; flex-wrap: wrap; overflow: visible; }
+body.student-mode #scr-student .subtabs button { flex: 1 1 auto; font-size: 1.05em; padding: .7em .7em; min-height: 54px; border-radius: 14px; }
+body.student-mode .btn.xs { font-size: .9em; padding: .4em .75em; }
+body.student-mode .btn.sm { padding: .55em .95em; }
+body.student-mode .chips button { padding: .5em 1em; }
+/* 태블릿(가로·세로): 영역 버튼을 한 줄에 크게 나눠 놓음 */
+@media (max-width: 1180px) {
+  body.student-mode #scr-student .topbar { flex-wrap: wrap; }
+  body.student-mode #scr-student .tabs.secs { order: 5; flex-basis: 100%; margin-left: 0; overflow: visible; }
+  body.student-mode #scr-student .tabs.secs button { flex: 1 1 0; justify-content: center; }
+}
+/* 좁은 화면: 세부 탭을 3칸 바둑판으로 */
+@media (max-width: 700px) {
+  body.student-mode #scr-student .subtabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  body.student-mode #scr-student .subtabs button { white-space: normal; word-break: keep-all; line-height: 1.25; }
+}
+@media (max-width: 480px) {
+  body.student-mode { font-size: 17px; }
+  body.student-mode #scr-student .tabs.secs { gap: 6px; }
+  body.student-mode #scr-student .tabs.secs button { font-size: .92em; padding: .5em .35em; min-height: 48px; }
+  body.student-mode #scr-student .subtabs button { font-size: .95em; padding: .6em .3em; min-height: 46px; }
+}
 h4 { margin: 16px 0 8px; font-size: .95em; color: var(--muted); }
 .nowrap { white-space: nowrap; }
 .down, .down-txt { color: var(--bad); } .up-txt { color: var(--good); } .warn-txt { color: var(--warn); }
