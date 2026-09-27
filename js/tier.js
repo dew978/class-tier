@@ -45,6 +45,8 @@
     hanja: { days: [1, 2, 3, 4, 5], start: '08:30', end: '16:30', testCount: [20, 20, 20], daily: 5 },
     showScores: true,
     rewards: { champion: '', diamond: '', platinum: '', gold: '', silver: '', bronze: '' },
+    // 월 마감 때 티어별로 보내는 보상금 (학급 경제)
+    rewardMoney: { champion: 0, diamond: 0, platinum: 0, gold: 0, silver: 0, bronze: 0 },
   };
   const STUDENT_CATS = ['reading', 'homework'];
   // 승급 시험 통과 기준: 문항이 적으면 90%, 중간 80%, 많으면 70%
@@ -60,6 +62,7 @@
     if (s.cats.reading.name === '독서 기록') s.cats.reading.name = '독후감';
     if (raw.hanja) Object.assign(s.hanja, raw.hanja);
     if (raw.rewards) Object.assign(s.rewards, raw.rewards);
+    if (raw.rewardMoney) for (const k of Object.keys(s.rewardMoney)) s.rewardMoney[k] = Math.max(0, Math.round(Number(raw.rewardMoney[k]) || 0));
     if (typeof raw.showScores === 'boolean') s.showScores = raw.showScores;
     return s;
   }

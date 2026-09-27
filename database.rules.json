@@ -7,67 +7,71 @@
       },
       "className": {
         ".read": true,
-        ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+        ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
       },
       "teacherName": {
-        ".read": "auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid)",
-        ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+        ".read": "(auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid))",
+        ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
       },
       "settings": {
-        ".read": "auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid)",
-        ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+        ".read": "(auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid))",
+        ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
+      },
+      "econ": {
+        ".read": "(auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid))",
+        ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
       }
     },
     "users": {
-      ".read": "auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid)",
+      ".read": "(auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid))",
       "$uid": {
-        ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+        ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
       }
     },
     "secrets": {
-      ".read": "auth != null && root.child('config/teacher').val() === auth.uid",
-      ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+      ".read": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
     },
     "activities": {
-      ".read": "auth != null && root.child('config/teacher').val() === auth.uid",
-      ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+      ".read": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
     },
     "entries": {
-      ".read": "auth != null && root.child('config/teacher').val() === auth.uid",
+      ".read": "(auth != null && root.child('config/teacher').val() === auth.uid)",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('config/teacher').val() === auth.uid)",
-        ".write": "auth != null && root.child('config/teacher').val() === auth.uid",
+        ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)",
         "$eid": {
-          ".write": "auth != null && auth.uid === $uid && root.child('users/' + auth.uid).exists() && ((!data.exists() && newData.child('by').val() === 'student' && newData.child('status').val() === 'pending' && !newData.child('points').exists() && !newData.child('reviewedAt').exists() && newData.child('text').isString() && newData.child('text').val().length <= 200 && ((newData.child('cat').val() === 'reading' && (newData.child('ox').val() === 'O' || newData.child('ox').val() === 'X')) || newData.child('cat').val() === 'homework' || (newData.child('cat').val() === 'unit' && root.child('openUnits/' + newData.child('aid').val()).exists() && newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('score').val() <= 100) || ((newData.child('cat').val() === 'lvTyping' || newData.child('cat').val() === 'lvRecorder') && newData.child('level').isNumber()))) || (!data.exists() && newData.child('by').val() === 'system' && newData.child('status').val() === 'approved' && newData.child('ts').val() <= now + 60000 && newData.child('ts').val() >= now - 600000 && ((newData.child('cat').val() === 'hanjaDaily' && $eid.beginsWith('hd-')) || (newData.child('cat').val() === 'lvHanja' && $eid.beginsWith('hl-'))) && ((now + 32400000) % 86400000) >= 27000000 && ((now + 32400000) % 86400000) <= 63000000 && ((now + 32400000 - (now + 32400000) % 86400000) / 86400000 + 4) % 7 >= 1 && ((now + 32400000 - (now + 32400000) % 86400000) / 86400000 + 4) % 7 <= 5) || (data.exists() && data.child('status').val() === 'pending' && !newData.exists()))"
+          ".write": "(auth != null && auth.uid === $uid && root.child('users/' + auth.uid).exists()) && ((!data.exists() && newData.child('by').val() === 'student' && newData.child('status').val() === 'pending' && !newData.child('points').exists() && !newData.child('reviewedAt').exists() && newData.child('text').isString() && newData.child('text').val().length <= 200 && ((newData.child('cat').val() === 'reading' && (newData.child('ox').val() === 'O' || newData.child('ox').val() === 'X')) || newData.child('cat').val() === 'homework' || (newData.child('cat').val() === 'unit' && root.child('openUnits/' + newData.child('aid').val()).exists() && newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('score').val() <= 100) || ((newData.child('cat').val() === 'lvTyping' || newData.child('cat').val() === 'lvRecorder') && newData.child('level').isNumber()))) || (!data.exists() && newData.child('by').val() === 'system' && newData.child('status').val() === 'approved' && newData.child('ts').val() <= now + 60000 && newData.child('ts').val() >= now - 600000 && ((newData.child('cat').val() === 'hanjaDaily' && $eid.beginsWith('hd-')) || (newData.child('cat').val() === 'lvHanja' && $eid.beginsWith('hl-'))) && ((now + 32400000) % 86400000) >= 27000000 && ((now + 32400000) % 86400000) <= 63000000 && ((((now + 32400000 - (now + 32400000) % 86400000) / 86400000) + 4) % 7) >= 1 && ((((now + 32400000 - (now + 32400000) % 86400000) / 86400000) + 4) % 7) <= 5) || (data.exists() && data.child('status').val() === 'pending' && !newData.exists()))"
         }
       }
     },
     "openUnits": {
-      ".read": "auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid)",
-      ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+      ".read": "(auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid))",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
     },
     "levels": {
-      ".read": "auth != null && root.child('config/teacher').val() === auth.uid",
-      ".write": "auth != null && root.child('config/teacher').val() === auth.uid",
+      ".read": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)",
       "$uid": {
         ".read": "auth != null && auth.uid === $uid"
       }
     },
     "hanja": {
-      ".read": "auth != null && root.child('config/teacher').val() === auth.uid",
-      ".write": "auth != null && root.child('config/teacher').val() === auth.uid",
+      ".read": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)",
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid && root.child('users/' + auth.uid).exists()"
+        ".write": "(auth != null && auth.uid === $uid && root.child('users/' + auth.uid).exists())"
       }
     },
     "standings": {
-      ".read": "auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid)",
-      ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+      ".read": "(auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid))",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
     },
     "myDetail": {
-      ".read": "auth != null && root.child('config/teacher').val() === auth.uid",
-      ".write": "auth != null && root.child('config/teacher').val() === auth.uid",
+      ".read": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)",
       "$month": {
         "$uid": {
           ".read": "auth != null && auth.uid === $uid"
@@ -75,8 +79,149 @@
       }
     },
     "seasons": {
-      ".read": "auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid)",
-      ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+      ".read": "(auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid))",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
+    },
+
+    "gov": {
+      ".read": "(auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid))",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      "cash": {
+        ".validate": "newData.isNumber() && newData.parent().child('last').val() !== data.parent().child('last').val() && (newData.parent().parent().child('feed/' + newData.parent().child('last').val() + '/a').isNumber() && ((data.exists() && newData.val() === data.val() + newData.parent().parent().child('feed/' + newData.parent().child('last').val() + '/a').val()) || (!data.exists() && newData.val() === newData.parent().parent().child('feed/' + newData.parent().child('last').val() + '/a').val())))"
+      },
+      "last": {
+        ".validate": "newData.isString() && newData.parent().parent().child('feed/' + newData.val() + '/u').val() === '_gov' && !root.child('feed/' + newData.val()).exists()"
+      },
+      "$other": { ".validate": false }
+    },
+    "acct": {
+      ".read": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "cash": {
+          ".write": "(auth != null && auth.uid === $uid && root.child('users/' + auth.uid).exists()) && newData.exists() && (newData.val() >= 0 || newData.val() >= data.val())",
+          ".validate": "newData.isNumber() && newData.parent().child('last').val() !== data.parent().child('last').val() && (newData.parent().parent().parent().child('feed/' + newData.parent().child('last').val() + '/a').isNumber() && ((data.exists() && newData.val() === data.val() + newData.parent().parent().parent().child('feed/' + newData.parent().child('last').val() + '/a').val()) || (!data.exists() && newData.val() === newData.parent().parent().parent().child('feed/' + newData.parent().child('last').val() + '/a').val())))"
+        },
+        "last": {
+          ".write": "(auth != null && auth.uid === $uid && root.child('users/' + auth.uid).exists()) && newData.exists()",
+          ".validate": "newData.isString() && newData.parent().parent().parent().child('feed/' + newData.val() + '/u').val() === $uid && !root.child('feed/' + newData.val()).exists()"
+        },
+        "items": {
+          "$iid": {
+            ".write": "((auth != null && auth.uid === $uid && root.child('users/' + auth.uid).exists()) && newData.exists() && (newData.parent().parent().child('last').val() !== data.parent().parent().child('last').val()) && newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('i').val() === $iid && ((newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('k').val() === 'buy' && ((data.exists() && newData.val() === data.val() + newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('q').val()) || (!data.exists() && newData.val() === newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('q').val())) && (!root.child('store/items/' + $iid + '/lim').exists() || newData.val() <= root.child('store/items/' + $iid + '/lim').val())) || (newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('k').val() === 'use' && newData.val() === data.val() - newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('q').val())))",
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() % 1 === 0"
+          }
+        },
+        "dep": {
+          "$did": {
+            ".write": "((auth != null && auth.uid === $uid && root.child('users/' + auth.uid).exists()) && (newData.parent().parent().child('last').val() !== data.parent().parent().child('last').val()) && newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('d').val() === $did && ((newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('k').val() === 'dep' && !data.exists() && newData.exists() && root.child('config/econ/bank').child('on').val() === true && root.child('config/econ/menus/bank').val() !== false && newData.child('p').val() === 0 - newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('a').val() && newData.child('p').val() >= root.child('config/econ/bank').child('min').val() && newData.child('p').val() % 1 === 0 && ((data.parent().parent().child('grade').exists() && newData.child('r').val() === root.child('config/econ/bank').child('rates/' + data.parent().parent().child('grade').val()).val()) || (!data.parent().parent().child('grade').exists() && newData.child('r').val() === root.child('config/econ/bank').child('rates/' + root.child('config/econ/bank').child('def').val()).val())) && newData.child('i').val() >= 0 && newData.child('i').val() % 1 === 0 && newData.child('i').val() <= newData.child('p').val() * newData.child('r').val() / 100 && newData.child('i').val() > newData.child('p').val() * newData.child('r').val() / 100 - 1 && newData.child('s').val() === now && newData.child('dd').val() === root.child('config/econ/bank').child('days').val()) || (newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('k').val() === 'wd' && data.exists() && !newData.exists() && ((now >= data.child('s').val() + data.child('dd').val() * 86400000 && newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('a').val() === data.child('p').val() + data.child('i').val()) || (now < data.child('s').val() + data.child('dd').val() * 86400000 && newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('a').val() === data.child('p').val())))))",
+            ".validate": "newData.hasChildren(['p', 'i', 'r', 's', 'dd']) && newData.child('p').isNumber() && newData.child('i').isNumber() && newData.child('r').isNumber() && newData.child('s').isNumber() && newData.child('dd').isNumber()"
+          }
+        },
+        "hold": {
+          "$sid": {
+            ".write": "((auth != null && auth.uid === $uid && root.child('users/' + auth.uid).exists()) && newData.exists() && (newData.parent().parent().child('last').val() !== data.parent().parent().child('last').val()) && newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('s').val() === $sid && ((newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('k').val() === 'sbuy' && ((data.child('q').exists() && newData.child('q').val() === data.child('q').val() + newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('q').val()) || (!data.child('q').exists() && newData.child('q').val() === newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('q').val())) && ((data.child('c').exists() && newData.child('c').val() === data.child('c').val() - newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('a').val()) || (!data.child('c').exists() && newData.child('c').val() === 0 - newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('a').val()))) || (newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('k').val() === 'ssell' && newData.child('q').val() === data.child('q').val() - newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('q').val() && newData.child('c').val() === data.child('c').val() - newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().child('last').val()).child('c').val() && (newData.child('q').val() > 0 || newData.child('c').val() === 0))))",
+            "q": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+            "c": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+            "$other": { ".validate": false }
+          }
+        },
+        "tc": {
+          ".write": "((auth != null && auth.uid === $uid && root.child('users/' + auth.uid).exists()) && newData.exists() && (newData.parent().child('last').val() !== data.parent().child('last').val()) && (newData.parent().parent().parent().child('feed/' + newData.parent().child('last').val()).child('k').val() === 'sbuy' || newData.parent().parent().parent().child('feed/' + newData.parent().child('last').val()).child('k').val() === 'ssell') && newData.child('d').val() === ((now + 32400000 - (now + 32400000) % 86400000) / 86400000) && ((data.child('d').val() === ((now + 32400000 - (now + 32400000) % 86400000) / 86400000) && newData.child('n').val() === data.child('n').val() + 1) || (data.child('d').val() !== ((now + 32400000 - (now + 32400000) % 86400000) / 86400000) && newData.child('n').val() === 1)) && newData.child('n').val() <= root.child('config/econ/trade/max').val() && root.child('config/econ/trade/on').val() === true && root.child('config/econ/menus/stock').val() !== false && ((root.child('market/' + newData.parent().parent().parent().child('feed/' + newData.parent().child('last').val()).child('s').val()).child('ty').val() === 'real' && ((((now + 32400000 - (now + 32400000) % 86400000) / 86400000) + 4) % 7) >= 1 && ((((now + 32400000 - (now + 32400000) % 86400000) / 86400000) + 4) % 7) <= 5 && ((now + 32400000) % 86400000) >= root.child('config/econ/trade/rs').val() * 60000 && ((now + 32400000) % 86400000) < root.child('config/econ/trade/re').val() * 60000 && now - root.child('market/' + newData.parent().parent().parent().child('feed/' + newData.parent().child('last').val()).child('s').val()).child('ut').val() <= 1800000) || (root.child('market/' + newData.parent().parent().parent().child('feed/' + newData.parent().child('last').val()).child('s').val()).child('ty').val() !== 'real' && ((now + 32400000) % 86400000) >= root.child('config/econ/trade/cs').val() * 60000 && ((now + 32400000) % 86400000) < root.child('config/econ/trade/ce').val() * 60000 + 60000)))",
+          ".validate": "newData.hasChildren(['d', 'n']) && newData.child('d').isNumber() && newData.child('n').isNumber()"
+        },
+        "grade": { ".validate": "newData.isString() && newData.val().length <= 4" },
+        "avatar": { ".validate": "newData.hasChildren(['style', 'seed'])" },
+        "$other": { ".validate": false }
+      }
+    },
+    "feed": {
+      ".read": "(auth != null && root.child('config/teacher').val() === auth.uid) || ((auth != null && root.child('users/' + auth.uid).exists()) && query.orderByChild === 'u' && query.equalTo === auth.uid)",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      ".indexOn": ["u", "t"],
+      "$lid": {
+        ".write": "(auth != null && root.child('users/' + auth.uid).exists()) && !data.exists() && newData.exists() && newData.child('u').val() === auth.uid && newData.child('by').val() === 'S' && ((newData.child('k').val() === 'buy' && (newData.child('i').isString() && newData.child('i').val().length <= 40 && !newData.child('i').val().contains('/')) && (root.child('config/econ/menus/shop').val() !== false) && root.child('store/items/' + newData.child('i').val()).child('on').val() === true && !root.child('store/items/' + newData.child('i').val()).child('g').exists() && (newData.child('q').isNumber() && newData.child('q').val() >= 1 && newData.child('q').val() <= 99 && newData.child('q').val() % 1 === 0) && newData.child('p').val() === root.child('store/items/' + newData.child('i').val()).child('p').val() && newData.child('a').val() === 0 - root.child('store/items/' + newData.child('i').val()).child('p').val() * newData.child('q').val() && newData.parent().parent().child('acct/' + auth.uid).child('items/' + newData.child('i').val()).val() !== root.child('acct/' + auth.uid).child('items/' + newData.child('i').val()).val() && (!root.child('store/items/' + newData.child('i').val()).child('st').exists() || newData.parent().parent().child('store/items/' + newData.child('i').val() + '/st').val() !== root.child('store/items/' + newData.child('i').val()).child('st').val()) && (newData.parent().parent().child('acct/' + auth.uid).child('cash').val() >= 0)) || (newData.child('k').val() === 'use' && (newData.child('i').isString() && newData.child('i').val().length <= 40 && !newData.child('i').val().contains('/')) && (newData.child('q').isNumber() && newData.child('q').val() >= 1 && newData.child('q').val() <= 99 && newData.child('q').val() % 1 === 0) && newData.child('a').val() === 0 && root.child('acct/' + auth.uid).child('items/' + newData.child('i').val()).val() >= newData.child('q').val() && newData.parent().parent().child('acct/' + auth.uid).child('items/' + newData.child('i').val()).val() !== root.child('acct/' + auth.uid).child('items/' + newData.child('i').val()).val()) || (newData.child('k').val() === 'grp' && (newData.child('i').isString() && newData.child('i').val().length <= 40 && !newData.child('i').val().contains('/')) && (root.child('config/econ/menus/shop').val() !== false) && root.child('store/items/' + newData.child('i').val()).child('on').val() === true && root.child('store/items/' + newData.child('i').val()).child('g').isNumber() && !root.child('store/items/' + newData.child('i').val()).child('done').exists() && newData.child('a').val() <= -1 && newData.child('a').val() % 1 === 0 && newData.parent().parent().child('store/items/' + newData.child('i').val() + '/r').val() !== root.child('store/items/' + newData.child('i').val()).child('r').val() && newData.parent().parent().child('store/items/' + newData.child('i').val() + '/r').val() <= root.child('store/items/' + newData.child('i').val()).child('g').val() && newData.parent().parent().child('store/contrib/' + newData.child('i').val() + '/' + auth.uid).val() !== root.child('store/contrib/' + newData.child('i').val() + '/' + auth.uid).val() && (newData.parent().parent().child('acct/' + auth.uid).child('cash').val() >= 0)) || (newData.child('k').val() === 'dep' && (newData.child('d').isString() && newData.child('d').val().length <= 40 && !newData.child('d').val().contains('/')) && !root.child('acct/' + auth.uid).child('dep/' + newData.child('d').val()).exists() && newData.parent().parent().child('acct/' + auth.uid).child('dep/' + newData.child('d').val()).exists() && (newData.parent().parent().child('acct/' + auth.uid).child('cash').val() >= 0)) || (newData.child('k').val() === 'wd' && (newData.child('d').isString() && newData.child('d').val().length <= 40 && !newData.child('d').val().contains('/')) && root.child('acct/' + auth.uid).child('dep/' + newData.child('d').val()).exists() && !newData.parent().parent().child('acct/' + auth.uid).child('dep/' + newData.child('d').val()).exists()) || (newData.child('k').val() === 'sbuy' && (newData.child('s').isString() && newData.child('s').val().length <= 40 && !newData.child('s').val().contains('/')) && root.child('market/' + newData.child('s').val()).child('on').val() === true && root.child('market/' + newData.child('s').val()).child('p').val() > 0 && newData.child('p').val() === root.child('market/' + newData.child('s').val()).child('p').val() && newData.child('a').val() <= -1 && newData.child('a').val() % 1 === 0 && newData.child('q').val() === (0 - newData.child('a').val()) / newData.child('p').val() && newData.parent().parent().child('acct/' + auth.uid).child('hold/' + newData.child('s').val() + '/q').val() !== root.child('acct/' + auth.uid).child('hold/' + newData.child('s').val() + '/q').val() && (newData.parent().parent().child('acct/' + auth.uid).child('tc/d').val() === ((now + 32400000 - (now + 32400000) % 86400000) / 86400000) && (newData.parent().parent().child('acct/' + auth.uid).child('tc/n').val() !== root.child('acct/' + auth.uid).child('tc/n').val() || root.child('acct/' + auth.uid).child('tc/d').val() !== ((now + 32400000 - (now + 32400000) % 86400000) / 86400000))) && (newData.parent().parent().child('acct/' + auth.uid).child('cash').val() >= 0)) || (newData.child('k').val() === 'ssell' && (newData.child('s').isString() && newData.child('s').val().length <= 40 && !newData.child('s').val().contains('/')) && root.child('market/' + newData.child('s').val()).child('p').val() > 0 && newData.child('p').val() === root.child('market/' + newData.child('s').val()).child('p').val() && newData.child('q').isNumber() && newData.child('q').val() > 0 && newData.child('q').val() <= root.child('acct/' + auth.uid).child('hold/' + newData.child('s').val() + '/q').val() && newData.child('a').val() >= 0 && newData.child('a').val() % 1 === 0 && newData.child('a').val() <= newData.child('q').val() * newData.child('p').val() && newData.child('a').val() > newData.child('q').val() * newData.child('p').val() - 1 && newData.child('c').isNumber() && newData.child('c').val() >= 0 && newData.parent().parent().child('acct/' + auth.uid).child('hold/' + newData.child('s').val() + '/q').val() !== root.child('acct/' + auth.uid).child('hold/' + newData.child('s').val() + '/q').val() && (newData.parent().parent().child('acct/' + auth.uid).child('tc/d').val() === ((now + 32400000 - (now + 32400000) % 86400000) / 86400000) && (newData.parent().parent().child('acct/' + auth.uid).child('tc/n').val() !== root.child('acct/' + auth.uid).child('tc/n').val() || root.child('acct/' + auth.uid).child('tc/d').val() !== ((now + 32400000 - (now + 32400000) % 86400000) / 86400000)))))",
+        ".validate": "newData.hasChildren(['u', 'k', 'a', 't', 'by']) && newData.child('u').isString() && newData.child('t').val() === now && (newData.child('by').val() === 'T' || newData.child('by').val() === 'S') && ((newData.child('u').val() === '_gov' && newData.parent().parent().child('gov/last').val() === $lid && ((root.child('gov/cash').exists() && newData.parent().parent().child('gov/cash').val() === root.child('gov/cash').val() + newData.child('a').val()) || (!root.child('gov/cash').exists() && (newData.parent().parent().child('gov/cash').val() === newData.child('a').val() || (newData.child('a').val() === 0 && !newData.parent().parent().child('gov/cash').exists()))))) || (newData.child('u').val() !== '_gov' && root.child('users/' + newData.child('u').val()).exists() && newData.parent().parent().child('acct/' + newData.child('u').val() + '/last').val() === $lid && ((root.child('acct/' + newData.child('u').val() + '/cash').exists() && newData.parent().parent().child('acct/' + newData.child('u').val() + '/cash').val() === root.child('acct/' + newData.child('u').val() + '/cash').val() + newData.child('a').val()) || (!root.child('acct/' + newData.child('u').val() + '/cash').exists() && (newData.parent().parent().child('acct/' + newData.child('u').val() + '/cash').val() === newData.child('a').val() || (newData.child('a').val() === 0 && !newData.parent().parent().child('acct/' + newData.child('u').val() + '/cash').exists()))))))",
+        "k": { ".validate": "newData.isString() && newData.val().length <= 10" },
+        "a": { ".validate": "newData.isNumber()" },
+        "m": { ".validate": "newData.isString() && newData.val().length <= 100" },
+        "n": { ".validate": "newData.isString() && newData.val().length <= 60" },
+        "i": { ".validate": "newData.isString()" },
+        "s": { ".validate": "newData.isString()" },
+        "d": { ".validate": "newData.isString()" },
+        "q": { ".validate": "newData.isNumber()" },
+        "p": { ".validate": "newData.isNumber()" },
+        "g": { ".validate": "newData.isNumber()" },
+        "x": { ".validate": "newData.isNumber()" },
+        "c": { ".validate": "newData.isNumber()" },
+        "src": { ".validate": "newData.isString()" },
+        "pr": { ".validate": "newData.isString()" },
+        "j": { ".validate": "newData.isString()" },
+        "u": { ".validate": true },
+        "t": { ".validate": true },
+        "by": { ".validate": true },
+        "$other": { ".validate": false }
+      }
+    },
+    "feedMark": {
+      ".read": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
+    },
+    "store": {
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      "items": {
+        ".read": "(auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid))",
+        "$iid": {
+          "st": {
+            ".write": "((auth != null && root.child('users/' + auth.uid).exists()) && newData.exists() && (newData.parent().parent().parent().parent().child('acct/' + auth.uid + '/last').val() !== root.child('acct/' + auth.uid + '/last').val()) && newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().parent().parent().child('acct/' + auth.uid + '/last').val()).child('k').val() === 'buy' && newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().parent().parent().child('acct/' + auth.uid + '/last').val()).child('i').val() === $iid && newData.val() === data.val() - newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().parent().parent().child('acct/' + auth.uid + '/last').val()).child('q').val())",
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "r": {
+            ".write": "((auth != null && root.child('users/' + auth.uid).exists()) && newData.exists() && (newData.parent().parent().parent().parent().child('acct/' + auth.uid + '/last').val() !== root.child('acct/' + auth.uid + '/last').val()) && newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().parent().parent().child('acct/' + auth.uid + '/last').val()).child('k').val() === 'grp' && newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().parent().parent().child('acct/' + auth.uid + '/last').val()).child('i').val() === $iid && ((data.exists() && newData.val() === data.val() - newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().parent().parent().child('acct/' + auth.uid + '/last').val()).child('a').val()) || (!data.exists() && newData.val() === 0 - newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().parent().parent().child('acct/' + auth.uid + '/last').val()).child('a').val())))",
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "p": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() % 1 === 0" },
+          "n": { ".validate": "newData.isString() && newData.val().length <= 40" }
+        }
+      },
+      "contrib": {
+        ".read": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+        "$iid": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid && ((auth != null && root.child('users/' + auth.uid).exists()) && newData.exists() && (newData.parent().parent().parent().parent().child('acct/' + auth.uid + '/last').val() !== root.child('acct/' + auth.uid + '/last').val()) && newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().parent().parent().child('acct/' + auth.uid + '/last').val()).child('k').val() === 'grp' && newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().parent().parent().child('acct/' + auth.uid + '/last').val()).child('i').val() === $iid && ((data.exists() && newData.val() === data.val() - newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().parent().parent().child('acct/' + auth.uid + '/last').val()).child('a').val()) || (!data.exists() && newData.val() === 0 - newData.parent().parent().parent().parent().child('feed/' + newData.parent().parent().parent().parent().child('acct/' + auth.uid + '/last').val()).child('a').val())))",
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          }
+        }
+      }
+    },
+    "jobs": {
+      ".read": "(auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid))",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
+    },
+    "market": {
+      ".read": "(auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid))",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
+    },
+    "pub": {
+      ".read": true,
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      "symbols": { ".validate": "newData.isString() && newData.val().length <= 500" },
+      "$other": { ".validate": false }
+    },
+    "quests": {
+      ".read": "(auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid))",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
+    },
+    "qprog": {
+      ".read": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      "$qid": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid"
+        }
+      }
     }
   }
 }

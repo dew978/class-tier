@@ -5,51 +5,101 @@
   const A = window.App;
   const { S, B, T, $, $$, esc, emblem, tierChip, tierName, nameTag, nameOf, toast, modal, confirmBox, fmtDate, fmtTime, signed } = A;
   const MAX_STUDENTS = 25;
-  let tab = 'board';
+  let sec = 'home', tab = 'home';
+  const secTab = {};
   let subs = [];
   let acts = {}, ents = {}, secrets = {}, levels = {}, hanjaAll = {};
   let boardMonth = null, actMonth = null;
   const sel = new Set();
   const main = () => $('#tc-main');
 
+  // 위쪽 = 영역, 아래쪽 = 영역 안의 탭 (다른 파일이 addTab으로 탭을 더함)
+  const SECS = [
+    { k: 'home', name: '🏠 학급 홈', tabs: ['home'] },
+    { k: 'tier', name: '🏆 티어', tabs: ['board', 'approve', 'acts', 'praise', 'levels', 'close'] },
+    { k: 'econ', name: '💰 경제', tabs: ['shop', 'jobs', 'bank', 'feed', 'stats', 'econset'] },
+    { k: 'quest', name: '🎯 퀘스트', tabs: ['quest'] },
+    { k: 'board', name: '📌 판', tabs: ['boards'] },
+    { k: 'admin', name: '⚙️ 관리', tabs: ['students', 'settings', 'import'] },
+  ];
+  const TAB_NAMES = {
+    board: '순위 현황', approve: '승인 대기', acts: '경쟁 활동', praise: '칭찬·1인1역', levels: '급수·한자', close: '월 마감·보상',
+    students: '학생 관리', settings: '티어 설정',
+  };
+  const badgeFns = [];
+  function badges() {
+    const b = { approve: pendingList().length };
+    for (const f of badgeFns) Object.assign(b, f());
+    return b;
+  }
+  function renderNav() {
+    const secs = SECS.map((s) => Object.assign({}, s, { tabs: s.tabs.filter((t) => SK[t]) })).filter((s) => s.tabs.length);
+    let cur = secs.find((s) => s.k === sec) || secs[0];
+    if (!cur.tabs.includes(tab)) tab = secTab[cur.k] && cur.tabs.includes(secTab[cur.k]) ? secTab[cur.k] : cur.tabs[0];
+    sec = cur.k;
+    const bd = badges();
+    const cnt = (n) => (n ? `<span class="cnt">${n}</span>` : '');
+    const secHtml = secs.map((s) => `<button data-sec="${s.k}" class="${s.k === sec ? 'on' : ''}">${s.name}${s.k !== sec ? cnt(s.tabs.reduce((n, t) => n + (bd[t] || 0), 0)) : ''}</button>`).join('');
+    const tabHtml = cur.tabs.length > 1 ? cur.tabs.map((t) => `<button data-tab="${t}" class="${t === tab ? 'on' : ''}">${esc(TAB_NAMES[t] || t)}${cnt(bd[t])}</button>`).join('') : '';
+    if ($('#tc-secs').innerHTML !== secHtml) $('#tc-secs').innerHTML = secHtml;
+    if ($('#tc-tabs').innerHTML !== tabHtml) $('#tc-tabs').innerHTML = tabHtml;
+    $('#tc-tabs').classList.toggle('hidden', !tabHtml);
+  }
+
   const Teacher = {
     enter() {
       subs.push(B.on('activities', (v) => { acts = v || {}; A.render(); }));
       subs.push(B.on('entries', (v) => { ents = v || {}; A.render(); }));
       subs.push(B.on('secrets', (v) => { secrets = v || {}; if (tab === 'students') A.render(); }));
-      subs.push(B.on('levels', (v) => { levels = v || {}; if (tab === 'levels' || tab === 'approve') A.render(); }));
+      subs.push(B.on('levels', (v) => { levels = v || {}; A.render(); }));
       subs.push(B.on('hanja', (v) => { hanjaAll = v || {}; if (tab === 'levels') A.render(); }));
+      for (const m of ['EconTeacher', 'QuestTeacher', 'BoardTeacher']) if (window[m] && window[m].enter) window[m].enter();
       main().dataset.tab = '';
       A.render();
     },
     leave() {
       subs.forEach((u) => u());
       subs = [];
-      acts = {}; ents = {}; secrets = {};
+      acts = {}; ents = {}; secrets = {}; levels = {};
       lastWritten = {};
+      for (const m of ['EconTeacher', 'QuestTeacher', 'BoardTeacher']) if (window[m] && window[m].leave) window[m].leave();
       main().dataset.tab = '';
       main().innerHTML = '';
+      sec = 'home'; tab = 'home';
     },
     render() {
       schedule();
-      $('#tc-brand').innerHTML = `${emblem('gold')}${esc(S.className || '클래스')} 티어 <span class="pill">선생님</span>`;
-      const n = pendingList().length;
-      $('#tc-tabs [data-tab="approve"]').innerHTML = `승인 대기${n ? `<span class="cnt">${n}</span>` : ''}`;
+      $('#tc-brand').innerHTML = `${emblem('gold')}<span class="brand-txt">${esc(S.className || '클래스')}</span> <span class="pill">선생님</span>`;
+      renderNav();
       if (main().dataset.tab !== tab) {
         main().dataset.tab = tab;
         main().onclick = null;
         main().onchange = null;
+        main().oninput = null;
         sel.clear();
         SK[tab]();
       }
       RD[tab]();
     },
+    // 다른 파일(경제·퀘스트·판)이 탭을 더할 때
+    addTab(key, name, sk, rd) { SK[key] = sk; RD[key] = rd || (() => {}); TAB_NAMES[key] = name; },
+    addBadges(fn) { badgeFns.push(fn); },
+    go(s, t) { secTab[sec] = tab; sec = s; tab = t || null; A.render(); window.scrollTo(0, 0); },
+    get tab() { return tab; },
+    levelsOf: (u) => levels[u] || {},
+    addStudent: (...a) => addStudent(...a),
+    genPw: () => genPw(),
+    sel,
   };
+  $('#tc-secs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sec]');
+    if (b && b.dataset.sec !== sec) Teacher.go(b.dataset.sec);
+  });
   $('#tc-tabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-tab]');
     if (!b) return;
     tab = b.dataset.tab;
-    $$('#tc-tabs button').forEach((x) => x.classList.toggle('on', x === b));
+    secTab[sec] = tab;
     A.render();
   });
 
@@ -190,6 +240,7 @@
     }
     const upd = {};
     const now = B.now();
+    const prizes = [];
     let skipped = 0, done = 0;
     for (const k of keys) {
       const [uid, id] = k.split('/');
@@ -199,16 +250,33 @@
       upd[`entries/${uid}/${id}/status`] = ok ? 'approved' : 'rejected';
       upd[`entries/${uid}/${id}/reviewedAt`] = now;
       if (!ok && reason) upd[`entries/${uid}/${id}/reason`] = reason;
-      // 타자·리코더 승급 심사 승인 → 급수 올리기
+      // 타자·리코더 승급 심사 승인 → 급수 올리기 (+ 상금이 있는 급수면 상금 안내)
       if (ok && e.track && window.Tracks.TRACKS[e.track]) {
         const cur = (levels[uid] && levels[uid][e.track]) || 0;
-        upd[`levels/${uid}/${e.track}`] = Math.max(cur, Number(e.level) || cur + 1);
+        const next = Math.max(cur, Number(e.level) || cur + 1);
+        upd[`levels/${uid}/${e.track}`] = next;
+        if (next > cur) prizes.push(...prizesFor(uid, e.track, cur, next));
       }
       sel.delete(k);
       done++;
     }
     if (done) await B.update('', upd);
     toast(`${done}건 ${ok ? '승인' : '반려'}${skipped ? ` · 마감된 달 ${skipped}건은 승인할 수 없어요` : ''}`, skipped ? 'bad' : 'good');
+    payPrizes(prizes);
+  }
+  // 급수가 cur → next로 오를 때 받는 상금 (급수표의 「상금 ○만」)
+  function prizesFor(uid, track, cur, next) {
+    const t = window.Tracks.TRACKS[track];
+    const out = [];
+    for (let n = cur + 1; n <= next; n++) { const lv = t.levels[n - 1]; if (lv && lv.prize) out.push({ u: uid, amt: lv.prize, label: `${t.name} ${lv.name}` }); }
+    return out;
+  }
+  async function payPrizes(list) {
+    const E = window.Econ;
+    if (!list.length || !E) return;
+    const ok = await confirmBox('🏅 승급 상금', `${list.map((p) => `<b>${esc(nameOf(p.u))}</b> · ${esc(p.label)} — <b>${E.won(p.amt)}</b>`).join('<br>')}<br><br>급수표의 상금을 지금 보낼까요? (새로 만든 돈 · 세금 없음)`, '상금 보내기');
+    if (!ok) return;
+    for (const p of list) await E.ops.send([p.u], p.amt, `${p.label} 승급 상금`, { kind: 'prize' });
   }
   async function onApprove(e) {
     const b = e.target.closest('[data-ap],[data-one],[data-undo]');
@@ -533,6 +601,7 @@
           [`entries/${u}/${B.newKey()}`]: { cat: t.cat, track: tk, level: cur + 1, text: `${t.name} ${t.levels[cur].name} 승급 (선생님 심사)`, month: m, ts: B.now(), by: 'teacher', status: 'approved' },
         });
         toast('승급했어요! 🎉', 'good');
+        payPrizes(prizesFor(u, tk, cur, cur + 1));
         return;
       }
       const hj = e.target.closest('[data-hj]');
@@ -664,8 +733,9 @@
     } else if (b.dataset.s === 'del') {
       if (!(await confirmBox('학생 삭제', `<b>${esc(x.name)}</b> 학생을 삭제할까요? 기록과 점수가 모두 사라지고 되돌릴 수 없어요.`, '삭제', true))) return;
       try { await B.deleteAccount(x.loginId, secrets[u] && secrets[u].pw); } catch (err) { console.warn('계정 삭제 실패', err); }
-      const upd = { ['users/' + u]: null, ['secrets/' + u]: null, ['entries/' + u]: null, ['levels/' + u]: null, ['hanja/' + u]: null };
+      const upd = { ['users/' + u]: null, ['secrets/' + u]: null, ['entries/' + u]: null, ['levels/' + u]: null, ['hanja/' + u]: null, ['acct/' + u]: null };
       for (const m of allMonths()) upd[`myDetail/${m}/${u}`] = null;
+      for (const [jid, j] of Object.entries(S.jobs || {})) if (j && j.mem && j.mem[u]) upd[`jobs/${jid}/mem/${u}`] = null;
       await B.update('', upd);
       toast('삭제했어요.');
     }
@@ -678,13 +748,16 @@
     const st = A.settings();
     main().innerHTML = `<div class="a-head"><h2>월 마감·보상</h2></div>
       <div class="two-col"><div class="col" style="gap:16px" id="cl-months"></div>
-      <div class="panel"><h3>티어별 보상</h3><p class="note" style="margin-top:0">마감하면 학생마다 해당 티어의 보상이 자동으로 정해지고, 학생 화면에도 보여요.</p>
-        ${REWARD_KEYS.map((k) => `<label>${tierChip(k)}<input data-rw="${k}" value="${esc(st.rewards[k] || '')}" placeholder="${{ champion: '예: 자리 우선 선택권 + 상장', diamond: '예: 간식 쿠폰 2장', platinum: '예: 간식 쿠폰 1장', gold: '예: 칭찬 도장 3개', silver: '예: 칭찬 도장 1개', bronze: '예: 다음 달 응원 메시지' }[k]}"></label>`).join('')}
+      <div class="panel"><h3>티어별 보상</h3><p class="note" style="margin-top:0">마감하면 학생마다 해당 티어의 보상이 자동으로 정해지고, 학생 화면에도 보여요. <b>보상금</b>을 적으면 마감 뒤 「보상금 보내기」로 한 번에 보낼 수 있어요.</p>
+        ${REWARD_KEYS.map((k) => `<div class="rw-row"><label>${tierChip(k)}<input data-rw="${k}" value="${esc(st.rewards[k] || '')}" placeholder="${{ champion: '예: 자리 우선 선택권 + 상장', diamond: '예: 간식 쿠폰 2장', platinum: '예: 간식 쿠폰 1장', gold: '예: 칭찬 도장 3개', silver: '예: 칭찬 도장 1개', bronze: '예: 다음 달 응원 메시지' }[k]}"></label>
+          <label>보상금<input data-rm="${k}" type="number" min="0" step="10000" value="${st.rewardMoney[k] || ''}" placeholder="0"></label></div>`).join('')}
         <div class="foot"><button class="btn primary" id="rw-save">보상 저장</button></div></div></div>`;
     $('#rw-save').onclick = async () => {
       const raw = JSON.parse(JSON.stringify(S.settingsRaw || {}));
       raw.rewards = {};
+      raw.rewardMoney = {};
       $$('[data-rw]').forEach((i) => (raw.rewards[i.dataset.rw] = i.value.trim()));
+      $$('[data-rm]').forEach((i) => (raw.rewardMoney[i.dataset.rm] = Math.max(0, Math.round(Number(i.value) || 0))));
       await B.set('config/settings', raw);
       toast('보상을 저장했어요. (이미 마감된 달에는 적용되지 않아요)', 'good');
     };
@@ -703,13 +776,16 @@
       const rw = s.rewards || {};
       const ids = Object.keys(s.rows || {}).sort((a, b) => s.rows[a].rank - s.rows[b].rank);
       const given = ids.filter((u) => rw[u] && rw[u].given).length;
+      const money = ids.reduce((n, u) => n + ((rw[u] && S.users[u] && rw[u].money) || 0), 0);
+      const E = window.Econ;
       const open = openSeason === m;
       return `<div class="panel"><div class="a-head" style="margin:0"><h3 style="margin:0">${esc(T.monthLabel(m))} <span class="pill good">마감</span></h3>
         <span class="muted">챔피언 👑 ${esc(s.championName || '-')} · 보상 지급 ${given}/${ids.length}</span><span class="sp"></span>
+        ${money && E ? (s.paidAt ? '<span class="pill good">보상금 보냄</span>' : `<button class="btn sm primary" data-cl="pay" data-m="${m}">💰 보상금 보내기 (${E.won(money)})</button>`) : ''}
         <button class="btn sm" data-cl="toggle" data-m="${m}">${open ? '접기' : '결과·보상 보기'}</button><button class="btn sm ghost" data-cl="reopen" data-m="${m}">마감 취소</button></div>
-        ${open ? `<div class="tbl-wrap" style="margin-top:12px"><table class="tbl"><thead><tr><th>순위</th><th>학생</th><th>티어</th><th class="num">점수</th><th>보상</th><th>지급</th></tr></thead><tbody>
+        ${open ? `<div class="tbl-wrap" style="margin-top:12px"><table class="tbl"><thead><tr><th>순위</th><th>학생</th><th>티어</th><th class="num">점수</th><th>보상</th>${money && E ? '<th class="num">보상금</th>' : ''}<th>지급</th></tr></thead><tbody>
           ${ids.map((u) => { const r = s.rows[u]; const tid = s.champion === u ? 'champion' : r.tier; const w = rw[u] || {}; return `<tr><td><b>${r.rank}</b></td><td>${esc(S.users[u] ? S.users[u].name : (r.name || '(삭제됨)'))}</td><td>${tierChip(tid)}</td><td class="num">${r.score}</td><td>${esc(w.text || '-')}</td>
-            <td>${w.text ? `<input type="checkbox" class="chk" data-give="${m}/${u}" ${w.given ? 'checked' : ''}>` : ''}</td></tr>`; }).join('')}
+            ${money && E ? `<td class="num">${w.money ? E.won(w.money) : '-'}</td>` : ''}<td>${w.text ? `<input type="checkbox" class="chk" data-give="${m}/${u}" ${w.given ? 'checked' : ''}>` : ''}</td></tr>`; }).join('')}
         </tbody></table></div>` : ''}</div>`;
     }).join('');
     $('#cl-months').innerHTML = html;
@@ -720,6 +796,18 @@
     if (!b) return;
     const m = b.dataset.m;
     if (b.dataset.cl === 'toggle') { openSeason = openSeason === m ? null : m; RD.close(); return; }
+    if (b.dataset.cl === 'pay') {
+      const s = S.seasons[m];
+      const E = window.Econ;
+      const groups = {};
+      for (const [u, w] of Object.entries(s.rewards || {})) if (w && w.money > 0 && S.users[u]) (groups[w.money] = groups[w.money] || []).push(u);
+      const total = Object.entries(groups).reduce((n, [amt, us]) => n + amt * us.length, 0);
+      if (!(await confirmBox('티어 보상금', `${esc(T.monthLabel(m))} 티어 보상금 <b>${E.won(total)}</b>을 ${Object.values(groups).flat().length}명에게 보낼까요? (새로 만든 돈 · 세금 없음)`, '보내기'))) return;
+      b.disabled = true;
+      for (const [amt, us] of Object.entries(groups)) if (!(await E.ops.send(us, Number(amt), `${T.monthLabel(m)} 티어 보상금`, { kind: 'reward' }))) { b.disabled = false; return; }
+      await B.set(`seasons/${m}/paidAt`, B.now());
+      return;
+    }
     if (b.dataset.cl === 'reopen') {
       if (!(await confirmBox('마감 취소', `${T.monthLabel(m)} 마감을 취소할까요? 확정된 티어와 보상 지급 기록이 지워지고, 다시 진행 중 상태가 돼요.`, '마감 취소', true))) return;
       await B.remove('seasons/' + m);
@@ -739,7 +827,7 @@
     for (const [u, x] of Object.entries(r.rows)) {
       rows[u] = Object.assign({}, x, { name: nameOf(u) });
       const tid = u === r.champion ? 'champion' : x.tier;
-      rewards[u] = { tier: tid, text: st.rewards[tid] || '', given: false };
+      rewards[u] = { tier: tid, text: st.rewards[tid] || '', given: false, money: st.rewardMoney[tid] || 0 };
     }
     await B.set('seasons/' + m, { closedAt: B.now(), rows, champion: r.champion, championName: nameOf(r.champion), rewards });
     await B.set('standings/' + m, { rows: r.rows, champion: r.champion, updatedAt: B.now() });

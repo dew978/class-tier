@@ -1,0 +1,227 @@
+{
+  "rules": {
+    "config": {
+      "teacher": {
+        ".read": true,
+        ".write": "auth != null && !data.exists() && newData.val() === auth.uid"
+      },
+      "className": {
+        ".read": true,
+        ".write": "{{T}}"
+      },
+      "teacherName": {
+        ".read": "{{TM}}",
+        ".write": "{{T}}"
+      },
+      "settings": {
+        ".read": "{{TM}}",
+        ".write": "{{T}}"
+      },
+      "econ": {
+        ".read": "{{TM}}",
+        ".write": "{{T}}"
+      }
+    },
+    "users": {
+      ".read": "{{TM}}",
+      "$uid": {
+        ".write": "{{T}}"
+      }
+    },
+    "secrets": {
+      ".read": "{{T}}",
+      ".write": "{{T}}"
+    },
+    "activities": {
+      ".read": "{{T}}",
+      ".write": "{{T}}"
+    },
+    "entries": {
+      ".read": "{{T}}",
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('config/teacher').val() === auth.uid)",
+        ".write": "{{T}}",
+        "$eid": {
+          ".write": "{{SELF}} && ({{ENTRY_STUDENT}} || {{ENTRY_SYSTEM}} || (data.exists() && data.child('status').val() === 'pending' && !newData.exists()))"
+        }
+      }
+    },
+    "openUnits": {
+      ".read": "{{TM}}",
+      ".write": "{{T}}"
+    },
+    "levels": {
+      ".read": "{{T}}",
+      ".write": "{{T}}",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid"
+      }
+    },
+    "hanja": {
+      ".read": "{{T}}",
+      ".write": "{{T}}",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "{{SELF}}"
+      }
+    },
+    "standings": {
+      ".read": "{{TM}}",
+      ".write": "{{T}}"
+    },
+    "myDetail": {
+      ".read": "{{T}}",
+      ".write": "{{T}}",
+      "$month": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid"
+        }
+      }
+    },
+    "seasons": {
+      ".read": "{{TM}}",
+      ".write": "{{T}}"
+    },
+
+    "gov": {
+      ".read": "{{TM}}",
+      ".write": "{{T}}",
+      "cash": {
+        ".validate": "newData.isNumber() && newData.parent().child('last').val() !== data.parent().child('last').val() && {{GOVCASHOK}}"
+      },
+      "last": {
+        ".validate": "newData.isString() && {{NR2}}.child('feed/' + newData.val() + '/u').val() === '_gov' && !root.child('feed/' + newData.val()).exists()"
+      },
+      "$other": { ".validate": false }
+    },
+    "acct": {
+      ".read": "{{T}}",
+      ".write": "{{T}}",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "cash": {
+          ".write": "{{SELF}} && newData.exists() && (newData.val() >= 0 || newData.val() >= data.val())",
+          ".validate": "newData.isNumber() && newData.parent().child('last').val() !== data.parent().child('last').val() && {{CASHOK}}"
+        },
+        "last": {
+          ".write": "{{SELF}} && newData.exists()",
+          ".validate": "newData.isString() && {{NR3}}.child('feed/' + newData.val() + '/u').val() === $uid && !root.child('feed/' + newData.val()).exists()"
+        },
+        "items": {
+          "$iid": {
+            ".write": "{{ITEMW}}",
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() % 1 === 0"
+          }
+        },
+        "dep": {
+          "$did": {
+            ".write": "{{DEPW}}",
+            ".validate": "newData.hasChildren(['p', 'i', 'r', 's', 'dd']) && newData.child('p').isNumber() && newData.child('i').isNumber() && newData.child('r').isNumber() && newData.child('s').isNumber() && newData.child('dd').isNumber()"
+          }
+        },
+        "hold": {
+          "$sid": {
+            ".write": "{{HOLDW}}",
+            "q": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+            "c": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+            "$other": { ".validate": false }
+          }
+        },
+        "tc": {
+          ".write": "{{TCW}}",
+          ".validate": "newData.hasChildren(['d', 'n']) && newData.child('d').isNumber() && newData.child('n').isNumber()"
+        },
+        "grade": { ".validate": "newData.isString() && newData.val().length <= 4" },
+        "avatar": { ".validate": "newData.hasChildren(['style', 'seed'])" },
+        "$other": { ".validate": false }
+      }
+    },
+    "feed": {
+      ".read": "{{T}} || ({{M}} && query.orderByChild === 'u' && query.equalTo === auth.uid)",
+      ".write": "{{T}}",
+      ".indexOn": ["u", "t"],
+      "$lid": {
+        ".write": "{{M}} && !data.exists() && newData.exists() && newData.child('u').val() === auth.uid && newData.child('by').val() === 'S' && {{STUOP}}",
+        ".validate": "newData.hasChildren(['u', 'k', 'a', 't', 'by']) && newData.child('u').isString() && newData.child('t').val() === now && (newData.child('by').val() === 'T' || newData.child('by').val() === 'S') && {{TIED}}",
+        "k": { ".validate": "newData.isString() && newData.val().length <= 10" },
+        "a": { ".validate": "newData.isNumber()" },
+        "m": { ".validate": "newData.isString() && newData.val().length <= 100" },
+        "n": { ".validate": "newData.isString() && newData.val().length <= 60" },
+        "i": { ".validate": "newData.isString()" },
+        "s": { ".validate": "newData.isString()" },
+        "d": { ".validate": "newData.isString()" },
+        "q": { ".validate": "newData.isNumber()" },
+        "p": { ".validate": "newData.isNumber()" },
+        "g": { ".validate": "newData.isNumber()" },
+        "x": { ".validate": "newData.isNumber()" },
+        "c": { ".validate": "newData.isNumber()" },
+        "src": { ".validate": "newData.isString()" },
+        "pr": { ".validate": "newData.isString()" },
+        "j": { ".validate": "newData.isString()" },
+        "u": { ".validate": true },
+        "t": { ".validate": true },
+        "by": { ".validate": true },
+        "$other": { ".validate": false }
+      }
+    },
+    "feedMark": {
+      ".read": "{{T}}",
+      ".write": "{{T}}"
+    },
+    "store": {
+      ".write": "{{T}}",
+      "items": {
+        ".read": "{{TM}}",
+        "$iid": {
+          "st": {
+            ".write": "{{STOCKW}}",
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "r": {
+            ".write": "{{RAISEW}}",
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          },
+          "p": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() % 1 === 0" },
+          "n": { ".validate": "newData.isString() && newData.val().length <= 40" }
+        }
+      },
+      "contrib": {
+        ".read": "{{T}}",
+        "$iid": {
+          "$uid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "auth != null && auth.uid === $uid && {{RAISEW}}",
+            ".validate": "newData.isNumber() && newData.val() >= 0"
+          }
+        }
+      }
+    },
+    "jobs": {
+      ".read": "{{TM}}",
+      ".write": "{{T}}"
+    },
+    "market": {
+      ".read": "{{TM}}",
+      ".write": "{{T}}"
+    },
+    "pub": {
+      ".read": true,
+      ".write": "{{T}}",
+      "symbols": { ".validate": "newData.isString() && newData.val().length <= 500" },
+      "$other": { ".validate": false }
+    },
+    "quests": {
+      ".read": "{{TM}}",
+      ".write": "{{T}}"
+    },
+    "qprog": {
+      ".read": "{{T}}",
+      ".write": "{{T}}",
+      "$qid": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid"
+        }
+      }
+    }
+  }
+}

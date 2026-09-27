@@ -1,0 +1,232 @@
+# 클래스 티어 보안 규칙 조각
+# tools/build-rules.ps1 이 rules.template.json 의 {{이름}} 을 아래 조각으로 바꿔 database.rules.json 을 만듭니다.
+# "@이름" 줄 다음부터 다음 "@" 줄 전까지가 한 조각 (여러 줄은 공백으로 이어 붙임). "#" 으로 시작하는 줄은 설명.
+#
+# 돈이 움직이는 원리
+#  - 돈·아이템·예금·주식이 바뀔 때마다 활동 기록(feed) 한 줄을 새로 쓰고, 계좌의 last 를 그 기록으로 바꿉니다.
+#  - 잔액은 "이전 잔액 + 기록의 변동(a)" 이어야 하고, 기록을 쓰면 잔액도 반드시 그만큼 바뀌어야 합니다.
+#  - 학생이 직접 쓰는 기록(구매·사용·공동구매·예금·주식)은 종류마다 조건을 검사하고,
+#    아이템 개수·재고·예금·보유 주식처럼 함께 바뀌는 곳은 그곳의 규칙이 계산이 맞는지 다시 검사합니다.
+
+# ── 누가 ──
+@T
+(auth != null && root.child('config/teacher').val() === auth.uid)
+@M
+(auth != null && root.child('users/' + auth.uid).exists())
+@TM
+(auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid))
+@SELF
+(auth != null && auth.uid === $uid && root.child('users/' + auth.uid).exists())
+
+# ── 이번 쓰기가 모두 반영된 뒤의 루트 (규칙 위치의 깊이만큼 parent) ──
+@NR2
+newData.parent().parent()
+@NR3
+newData.parent().parent().parent()
+@NR4
+newData.parent().parent().parent().parent()
+
+# ── 이번 쓰기에서 새로 남긴 활동 기록 E 와, 그 기록이 새것인지 FRESH ──
+# acct/$uid/(tc) — 깊이 3
+@FRESHA3
+(newData.parent().child('last').val() !== data.parent().child('last').val())
+@EA3
+{{NR3}}.child('feed/' + newData.parent().child('last').val())
+# acct/$uid/(items|dep|hold)/$x — 깊이 4
+@FRESHA4
+(newData.parent().parent().child('last').val() !== data.parent().parent().child('last').val())
+@EA4
+{{NR4}}.child('feed/' + newData.parent().parent().child('last').val())
+# store/…/$x/… — 깊이 4, 학생 본인 계좌의 last
+@FRESH4
+({{NR4}}.child('acct/' + auth.uid + '/last').val() !== root.child('acct/' + auth.uid + '/last').val())
+@E4
+{{NR4}}.child('feed/' + {{NR4}}.child('acct/' + auth.uid + '/last').val())
+
+# ── 한국 시간 ──
+@KMS
+((now + 32400000) % 86400000)
+@KDAY
+((now + 32400000 - (now + 32400000) % 86400000) / 86400000)
+@KWD
+(({{KDAY}} + 4) % 7)
+
+# ── 잔액 = 이전 잔액 + 이번 기록의 변동 ──
+@CASHOK
+({{NR3}}.child('feed/' + newData.parent().child('last').val() + '/a').isNumber()
+ && ((data.exists() && newData.val() === data.val() + {{NR3}}.child('feed/' + newData.parent().child('last').val() + '/a').val())
+  || (!data.exists() && newData.val() === {{NR3}}.child('feed/' + newData.parent().child('last').val() + '/a').val())))
+@GOVCASHOK
+({{NR2}}.child('feed/' + newData.parent().child('last').val() + '/a').isNumber()
+ && ((data.exists() && newData.val() === data.val() + {{NR2}}.child('feed/' + newData.parent().child('last').val() + '/a').val())
+  || (!data.exists() && newData.val() === {{NR2}}.child('feed/' + newData.parent().child('last').val() + '/a').val())))
+
+# ── 활동 기록(feed/$lid) 규칙에서 쓰는 조각: newData = 기록 한 줄 ──
+@FU
+newData.child('u').val()
+@FA
+newData.child('a').val()
+@ACC
+{{NR2}}.child('acct/' + auth.uid)
+@ACC0
+root.child('acct/' + auth.uid)
+@ITEM0
+root.child('store/items/' + newData.child('i').val())
+@STK0
+root.child('market/' + newData.child('s').val())
+@NI
+{{ACC}}.child('items/' + newData.child('i').val()).val()
+@OI
+{{ACC0}}.child('items/' + newData.child('i').val()).val()
+@QINT
+(newData.child('q').isNumber() && newData.child('q').val() >= 1 && newData.child('q').val() <= 99 && newData.child('q').val() % 1 === 0)
+@IOK
+(newData.child('i').isString() && newData.child('i').val().length <= 40 && !newData.child('i').val().contains('/'))
+@SOK
+(newData.child('s').isString() && newData.child('s').val().length <= 40 && !newData.child('s').val().contains('/'))
+@DOK
+(newData.child('d').isString() && newData.child('d').val().length <= 40 && !newData.child('d').val().contains('/'))
+@CASHNN
+({{ACC}}.child('cash').val() >= 0)
+@SHOPON
+(root.child('config/econ/menus/shop').val() !== false)
+
+# 기록과 계좌가 함께 바뀌었는지: 계좌의 last 가 이 기록이고, 잔액이 정확히 a 만큼 바뀜
+@TIED
+(({{FU}} === '_gov' && {{NR2}}.child('gov/last').val() === $lid
+   && ((root.child('gov/cash').exists() && {{NR2}}.child('gov/cash').val() === root.child('gov/cash').val() + {{FA}})
+    || (!root.child('gov/cash').exists() && ({{NR2}}.child('gov/cash').val() === {{FA}} || ({{FA}} === 0 && !{{NR2}}.child('gov/cash').exists())))))
+ || ({{FU}} !== '_gov' && root.child('users/' + {{FU}}).exists() && {{NR2}}.child('acct/' + {{FU}} + '/last').val() === $lid
+   && ((root.child('acct/' + {{FU}} + '/cash').exists() && {{NR2}}.child('acct/' + {{FU}} + '/cash').val() === root.child('acct/' + {{FU}} + '/cash').val() + {{FA}})
+    || (!root.child('acct/' + {{FU}} + '/cash').exists() && ({{NR2}}.child('acct/' + {{FU}} + '/cash').val() === {{FA}} || ({{FA}} === 0 && !{{NR2}}.child('acct/' + {{FU}} + '/cash').exists()))))))
+
+# ── 학생이 직접 하는 경제 활동 (기록 쪽 검사) ──
+# 상점 구매: 값 = 가격 × 개수. 아이템 개수(→ items 규칙)와 재고(→ st 규칙)가 함께 바뀌어야 함
+@OP_BUY
+(newData.child('k').val() === 'buy' && {{IOK}} && {{SHOPON}}
+ && {{ITEM0}}.child('on').val() === true && !{{ITEM0}}.child('g').exists() && {{QINT}}
+ && newData.child('p').val() === {{ITEM0}}.child('p').val()
+ && {{FA}} === 0 - {{ITEM0}}.child('p').val() * newData.child('q').val()
+ && {{NI}} !== {{OI}}
+ && (!{{ITEM0}}.child('st').exists() || {{NR2}}.child('store/items/' + newData.child('i').val() + '/st').val() !== {{ITEM0}}.child('st').val())
+ && {{CASHNN}})
+# 아이템 사용: 가진 개수 안에서, 돈은 그대로
+@OP_USE
+(newData.child('k').val() === 'use' && {{IOK}} && {{QINT}} && {{FA}} === 0 && {{OI}} >= newData.child('q').val() && {{NI}} !== {{OI}})
+# 공동구매 참여: 모인 돈(→ r 규칙)·내 기여(→ contrib 규칙)가 함께 바뀌고, 목표를 넘지 않음
+@GR0
+{{ITEM0}}.child('r').val()
+@GR1
+{{NR2}}.child('store/items/' + newData.child('i').val() + '/r').val()
+@OP_GRP
+(newData.child('k').val() === 'grp' && {{IOK}} && {{SHOPON}}
+ && {{ITEM0}}.child('on').val() === true && {{ITEM0}}.child('g').isNumber() && !{{ITEM0}}.child('done').exists()
+ && {{FA}} <= -1 && {{FA}} % 1 === 0
+ && {{GR1}} !== {{GR0}} && {{GR1}} <= {{ITEM0}}.child('g').val()
+ && {{NR2}}.child('store/contrib/' + newData.child('i').val() + '/' + auth.uid).val() !== root.child('store/contrib/' + newData.child('i').val() + '/' + auth.uid).val()
+ && {{CASHNN}})
+# 예금 가입·찾기: 계산은 예금(dep) 규칙이 검사
+@OP_DEP
+(newData.child('k').val() === 'dep' && {{DOK}} && !{{ACC0}}.child('dep/' + newData.child('d').val()).exists() && {{ACC}}.child('dep/' + newData.child('d').val()).exists() && {{CASHNN}})
+@OP_WD
+(newData.child('k').val() === 'wd' && {{DOK}} && {{ACC0}}.child('dep/' + newData.child('d').val()).exists() && !{{ACC}}.child('dep/' + newData.child('d').val()).exists())
+# 주식: 오늘 거래 횟수(tc)가 함께 바뀌어야 함 — 거래 시간·횟수 한도는 tc 규칙이 검사
+@TRADE
+({{ACC}}.child('tc/d').val() === {{KDAY}}
+ && ({{ACC}}.child('tc/n').val() !== {{ACC0}}.child('tc/n').val() || {{ACC0}}.child('tc/d').val() !== {{KDAY}}))
+@NHQ
+{{ACC}}.child('hold/' + newData.child('s').val() + '/q').val()
+@OHQ
+{{ACC0}}.child('hold/' + newData.child('s').val() + '/q').val()
+# 매수: 수량 = 금액 ÷ 가격. 보유 수량·투자금 계산은 hold 규칙이 검사
+@OP_SBUY
+(newData.child('k').val() === 'sbuy' && {{SOK}} && {{STK0}}.child('on').val() === true && {{STK0}}.child('p').val() > 0
+ && newData.child('p').val() === {{STK0}}.child('p').val()
+ && {{FA}} <= -1 && {{FA}} % 1 === 0
+ && newData.child('q').val() === (0 - {{FA}}) / newData.child('p').val()
+ && {{NHQ}} !== {{OHQ}} && {{TRADE}} && {{CASHNN}})
+# 매도: 받는 돈 = 수량 × 가격 (원 미만 버림), c = 줄어드는 투자금
+@OP_SSELL
+(newData.child('k').val() === 'ssell' && {{SOK}} && {{STK0}}.child('p').val() > 0
+ && newData.child('p').val() === {{STK0}}.child('p').val()
+ && newData.child('q').isNumber() && newData.child('q').val() > 0 && newData.child('q').val() <= {{OHQ}}
+ && {{FA}} >= 0 && {{FA}} % 1 === 0
+ && {{FA}} <= newData.child('q').val() * newData.child('p').val()
+ && {{FA}} > newData.child('q').val() * newData.child('p').val() - 1
+ && newData.child('c').isNumber() && newData.child('c').val() >= 0
+ && {{NHQ}} !== {{OHQ}} && {{TRADE}})
+@STUOP
+({{OP_BUY}} || {{OP_USE}} || {{OP_GRP}} || {{OP_DEP}} || {{OP_WD}} || {{OP_SBUY}} || {{OP_SSELL}})
+
+# ── 함께 바뀌는 곳의 계산 검사 (학생 쓰기) ──
+# acct/$uid/items/$iid : 구매면 +개수(보유 한도 이하), 사용이면 −개수
+@ITEMW
+({{SELF}} && newData.exists() && {{FRESHA4}} && {{EA4}}.child('i').val() === $iid
+ && (({{EA4}}.child('k').val() === 'buy'
+      && ((data.exists() && newData.val() === data.val() + {{EA4}}.child('q').val()) || (!data.exists() && newData.val() === {{EA4}}.child('q').val()))
+      && (!root.child('store/items/' + $iid + '/lim').exists() || newData.val() <= root.child('store/items/' + $iid + '/lim').val()))
+  || ({{EA4}}.child('k').val() === 'use' && newData.val() === data.val() - {{EA4}}.child('q').val())))
+# acct/$uid/dep/$did : 가입(원금·이자율·이자·시작·기간) / 찾기(만기면 원금+이자, 아니면 원금)
+@BANK
+root.child('config/econ/bank')
+@DEPW
+({{SELF}} && {{FRESHA4}} && {{EA4}}.child('d').val() === $did
+ && (({{EA4}}.child('k').val() === 'dep' && !data.exists() && newData.exists()
+      && {{BANK}}.child('on').val() === true && root.child('config/econ/menus/bank').val() !== false
+      && newData.child('p').val() === 0 - {{EA4}}.child('a').val()
+      && newData.child('p').val() >= {{BANK}}.child('min').val() && newData.child('p').val() % 1 === 0
+      && ((data.parent().parent().child('grade').exists() && newData.child('r').val() === {{BANK}}.child('rates/' + data.parent().parent().child('grade').val()).val())
+       || (!data.parent().parent().child('grade').exists() && newData.child('r').val() === {{BANK}}.child('rates/' + {{BANK}}.child('def').val()).val()))
+      && newData.child('i').val() >= 0 && newData.child('i').val() % 1 === 0
+      && newData.child('i').val() <= newData.child('p').val() * newData.child('r').val() / 100
+      && newData.child('i').val() > newData.child('p').val() * newData.child('r').val() / 100 - 1
+      && newData.child('s').val() === now && newData.child('dd').val() === {{BANK}}.child('days').val())
+  || ({{EA4}}.child('k').val() === 'wd' && data.exists() && !newData.exists()
+      && ((now >= data.child('s').val() + data.child('dd').val() * 86400000 && {{EA4}}.child('a').val() === data.child('p').val() + data.child('i').val())
+       || (now < data.child('s').val() + data.child('dd').val() * 86400000 && {{EA4}}.child('a').val() === data.child('p').val())))))
+# acct/$uid/hold/$sid : 매수면 수량·투자금 증가, 매도면 감소 (다 팔면 투자금 0)
+@HOLDW
+({{SELF}} && newData.exists() && {{FRESHA4}} && {{EA4}}.child('s').val() === $sid
+ && (({{EA4}}.child('k').val() === 'sbuy'
+      && ((data.child('q').exists() && newData.child('q').val() === data.child('q').val() + {{EA4}}.child('q').val()) || (!data.child('q').exists() && newData.child('q').val() === {{EA4}}.child('q').val()))
+      && ((data.child('c').exists() && newData.child('c').val() === data.child('c').val() - {{EA4}}.child('a').val()) || (!data.child('c').exists() && newData.child('c').val() === 0 - {{EA4}}.child('a').val())))
+  || ({{EA4}}.child('k').val() === 'ssell'
+      && newData.child('q').val() === data.child('q').val() - {{EA4}}.child('q').val()
+      && newData.child('c').val() === data.child('c').val() - {{EA4}}.child('c').val()
+      && (newData.child('q').val() > 0 || newData.child('c').val() === 0))))
+# acct/$uid/tc : 오늘 거래 횟수 +1, 하루 한도 이하, 거래 시간 (실제 주식은 평일 장중 + 시세가 30분 이내)
+@STK3
+root.child('market/' + {{EA3}}.child('s').val())
+@TCW
+({{SELF}} && newData.exists() && {{FRESHA3}} && ({{EA3}}.child('k').val() === 'sbuy' || {{EA3}}.child('k').val() === 'ssell')
+ && newData.child('d').val() === {{KDAY}}
+ && ((data.child('d').val() === {{KDAY}} && newData.child('n').val() === data.child('n').val() + 1) || (data.child('d').val() !== {{KDAY}} && newData.child('n').val() === 1))
+ && newData.child('n').val() <= root.child('config/econ/trade/max').val()
+ && root.child('config/econ/trade/on').val() === true && root.child('config/econ/menus/stock').val() !== false
+ && (({{STK3}}.child('ty').val() === 'real' && {{KWD}} >= 1 && {{KWD}} <= 5
+      && {{KMS}} >= root.child('config/econ/trade/rs').val() * 60000 && {{KMS}} < root.child('config/econ/trade/re').val() * 60000
+      && now - {{STK3}}.child('ut').val() <= 1800000)
+  || ({{STK3}}.child('ty').val() !== 'real'
+      && {{KMS}} >= root.child('config/econ/trade/cs').val() * 60000 && {{KMS}} < root.child('config/econ/trade/ce').val() * 60000 + 60000)))
+# store/items/$iid/st : 재고 −개수
+@STOCKW
+({{M}} && newData.exists() && {{FRESH4}} && {{E4}}.child('k').val() === 'buy' && {{E4}}.child('i').val() === $iid
+ && newData.val() === data.val() - {{E4}}.child('q').val())
+# store/items/$iid/r , store/contrib/$iid/$uid : + 낸 돈
+@RAISEW
+({{M}} && newData.exists() && {{FRESH4}} && {{E4}}.child('k').val() === 'grp' && {{E4}}.child('i').val() === $iid
+ && ((data.exists() && newData.val() === data.val() - {{E4}}.child('a').val()) || (!data.exists() && newData.val() === 0 - {{E4}}.child('a').val())))
+
+# ── 티어 기록(entries): 학생 제출·자동 기록 ──
+@ENTRY_STUDENT
+(!data.exists() && newData.child('by').val() === 'student' && newData.child('status').val() === 'pending' && !newData.child('points').exists() && !newData.child('reviewedAt').exists()
+ && newData.child('text').isString() && newData.child('text').val().length <= 200
+ && ((newData.child('cat').val() === 'reading' && (newData.child('ox').val() === 'O' || newData.child('ox').val() === 'X'))
+  || newData.child('cat').val() === 'homework'
+  || (newData.child('cat').val() === 'unit' && root.child('openUnits/' + newData.child('aid').val()).exists() && newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('score').val() <= 100)
+  || ((newData.child('cat').val() === 'lvTyping' || newData.child('cat').val() === 'lvRecorder') && newData.child('level').isNumber())))
+@ENTRY_SYSTEM
+(!data.exists() && newData.child('by').val() === 'system' && newData.child('status').val() === 'approved'
+ && newData.child('ts').val() <= now + 60000 && newData.child('ts').val() >= now - 600000
+ && ((newData.child('cat').val() === 'hanjaDaily' && $eid.beginsWith('hd-')) || (newData.child('cat').val() === 'lvHanja' && $eid.beginsWith('hl-')))
+ && {{KMS}} >= 27000000 && {{KMS}} <= 63000000 && {{KWD}} >= 1 && {{KWD}} <= 5)

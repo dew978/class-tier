@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/tier.css">
+  <link rel="stylesheet" href="css/econ.css">
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -73,17 +74,11 @@
   <section id="scr-student" class="screen hidden">
     <header class="topbar">
       <div class="brand" id="st-brand"></div>
+      <nav class="tabs secs" id="st-secs"></nav>
       <div class="top-me" id="st-me"></div>
       <button class="btn ghost sm" data-act="logout">로그아웃</button>
     </header>
-    <nav class="subtabs" id="st-tabs">
-      <button data-tab="home" class="on">🏠 홈</button>
-      <button data-tab="rank">📊 순위</button>
-      <button data-tab="submit">✍️ 기록하기</button>
-      <button data-tab="hanja">🀄 한자</button>
-      <button data-tab="mine">📋 내 점수</button>
-      <button data-tab="fame">🏆 명예의 전당</button>
-    </nav>
+    <nav class="subtabs" id="st-tabs"></nav>
     <main class="page" id="st-main"></main>
   </section>
 
@@ -91,18 +86,10 @@
   <section id="scr-teacher" class="screen hidden">
     <header class="topbar">
       <div class="brand" id="tc-brand"></div>
-      <nav class="tabs" id="tc-tabs">
-        <button data-tab="board" class="on">순위 현황</button>
-        <button data-tab="approve">승인 대기</button>
-        <button data-tab="acts">경쟁 활동</button>
-        <button data-tab="praise">칭찬·1인1역</button>
-        <button data-tab="levels">급수·한자</button>
-        <button data-tab="students">학생 관리</button>
-        <button data-tab="close">월 마감·보상</button>
-        <button data-tab="settings">설정</button>
-      </nav>
+      <nav class="tabs secs" id="tc-secs"></nav>
       <button class="btn ghost sm" data-act="logout">로그아웃</button>
     </header>
+    <nav class="subtabs wide" id="tc-tabs"></nav>
     <main class="page wide" id="tc-main"></main>
   </section>
 
@@ -115,7 +102,12 @@
   <script src="js/hanja.js"></script>
   <script src="js/backend.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/econ.js"></script>
   <script src="js/hanja-study.js"></script>
+  <script src="js/econ-student.js"></script>
   <script src="js/teacher.js"></script>
+  <script src="js/econ-teacher.js"></script>
+  <script src="js/prices.js"></script>
+  <script src="js/importer.js"></script>
 </body>
 </html>

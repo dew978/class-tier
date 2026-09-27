@@ -9,8 +9,10 @@
     uid: null, isTeacher: false, teacherUid: null, settingUp: false,
     className: '', teacherName: '선생님', settingsRaw: null,
     users: {}, standings: {}, seasons: {}, myEntries: {}, myDetail: {},
-    subs: [], detailSubs: {}, screen: null, tab: 'home', pick: 'unit', mineMonth: null,
+    subs: [], detailSubs: {}, screen: null, sec: 'tier', tab: 'home', secTab: {}, pick: 'unit', mineMonth: null,
     myLevels: {}, hanja: null, openUnits: {},
+    // 학급 경제
+    econRaw: null, acct: null, accts: {}, store: {}, storeContrib: {}, jobs: {}, market: {}, gov: null, quests: {},
   };
   const settings = () => T.mergeSettings(S.settingsRaw);
   const curMonth = () => T.monthKey(B.now());
@@ -189,12 +191,21 @@
     });
     sub('standings', (v) => { S.standings = v || {}; render(); });
     sub('seasons', (v) => { S.seasons = v || {}; render(); });
+    // 학급 경제 (공용)
+    sub('config/econ', (v) => { S.econRaw = v; render(); });
+    sub('store/items', (v) => { S.store = v || {}; render(); });
+    sub('jobs', (v) => { S.jobs = v || {}; render(); });
+    sub('market', (v) => { S.market = v || {}; render(); });
+    sub('gov', (v) => { S.gov = v || {}; render(); });
+    sub('quests', (v) => { S.quests = v || {}; render(); });
     if (!S.isTeacher) {
       sub('entries/' + uid, (v) => { S.myEntries = v || {}; render(); });
       sub('levels/' + uid, (v) => { S.myLevels = v || {}; render(); });
       sub('hanja/' + uid, (v) => { S.hanja = v || { learned: 0, level: 0, review: {} }; render(); });
       sub('openUnits', (v) => { S.openUnits = v || {}; render(); });
+      sub('acct/' + uid, (v) => { S.acct = v || {}; render(); });
       watchDetail(curMonth());
+      S.sec = 'tier';
       S.tab = 'home';
       show('student');
     } else {
@@ -213,17 +224,63 @@
     if (window.Teacher) window.Teacher.leave();
     $('#modal-root').innerHTML = '';
     if (window.HanjaStudy) window.HanjaStudy.reset();
-    Object.assign(S, { uid: null, isTeacher: false, subs: [], detailSubs: {}, users: {}, standings: {}, seasons: {}, myEntries: {}, myDetail: {}, mineMonth: null, myLevels: {}, hanja: null, openUnits: {} });
+    if (window.EconStudent) window.EconStudent.reset();
+    Object.assign(S, {
+      uid: null, isTeacher: false, subs: [], detailSubs: {}, users: {}, standings: {}, seasons: {}, myEntries: {}, myDetail: {}, mineMonth: null, myLevels: {}, hanja: null, openUnits: {},
+      econRaw: null, acct: null, accts: {}, store: {}, storeContrib: {}, jobs: {}, market: {}, gov: null, quests: {}, secTab: {},
+    });
   }
   async function logout() { await B.signOut(); }
   document.addEventListener('click', (e) => { if (e.target.closest('[data-act="logout"]')) logout(); });
 
   /* ───────────── 학생 화면 ───────────── */
+  // 위쪽 = 영역(티어·경제·퀘스트·판), 아래쪽 = 영역 안의 탭. 세 번째 값 = 선생님이 끌 수 있는 메뉴 이름
+  const ST_SECS = [
+    { k: 'tier', name: '🏆 티어', tabs: [['home', '🏠 홈'], ['rank', '📊 순위'], ['submit', '✍️ 기록하기'], ['hanja', '🀄 한자'], ['mine', '📋 내 점수'], ['fame', '🏆 명예의 전당']] },
+    { k: 'econ', name: '💰 경제', tabs: [['wallet', '👛 내 지갑'], ['shop', '🛒 상점', 'shop'], ['bank', '🏦 은행', 'bank'], ['stock', '📈 주식', 'stock'], ['jobs', '💼 직업', 'jobs']] },
+    { k: 'quest', name: '🎯 퀘스트', mod: 'QuestStudent', tabs: [['quest', '🎯 퀘스트', 'quest']] },
+    { k: 'board', name: '📌 판', mod: 'BoardStudent', tabs: [['board', '📌 판', 'board']] },
+  ];
+  function stSecs() {
+    const menus = window.Econ ? window.Econ.cfg().menus : {};
+    return ST_SECS.filter((s) => !s.mod || window[s.mod])
+      .map((s) => Object.assign({}, s, { tabs: s.tabs.filter((t) => !t[2] || menus[t[2]] !== false) }))
+      .filter((s) => s.tabs.length);
+  }
+  function go(sec, tab) {
+    S.secTab[S.sec] = S.tab;
+    S.sec = sec;
+    S.tab = tab || null;
+    render();
+    window.scrollTo(0, 0);
+  }
+  function renderStudentNav() {
+    const secs = stSecs();
+    const sec = secs.find((s) => s.k === S.sec) || secs[0];
+    if (!sec.tabs.some((t) => t[0] === S.tab)) {
+      const remembered = S.secTab[sec.k];
+      S.tab = remembered && sec.tabs.some((t) => t[0] === remembered) ? remembered : sec.tabs[0][0];
+    }
+    S.sec = sec.k;
+    const pending = Object.values(S.myEntries).filter((e) => e.status === 'pending').length;
+    const badges = Object.assign({ submit: pending }, window.EconStudent ? window.EconStudent.badges() : {}, window.QuestStudent ? window.QuestStudent.badges() : {});
+    const secBadge = (s) => s.tabs.reduce((n, t) => n + (badges[t[0]] || 0), 0);
+    const cnt = (n) => (n ? `<span class="cnt">${n}</span>` : '');
+    const secHtml = secs.length > 1 ? secs.map((s) => `<button data-sec="${s.k}" class="${s.k === sec.k ? 'on' : ''}">${s.name}${s.k !== sec.k ? cnt(secBadge(s)) : ''}</button>`).join('') : '';
+    const tabHtml = sec.tabs.length > 1 ? sec.tabs.map(([k, name]) => `<button data-tab="${k}" class="${k === S.tab ? 'on' : ''}">${name}${cnt(badges[k])}</button>`).join('') : '';
+    if ($('#st-secs').innerHTML !== secHtml) $('#st-secs').innerHTML = secHtml;
+    if ($('#st-tabs').innerHTML !== tabHtml) $('#st-tabs').innerHTML = tabHtml;
+    $('#st-tabs').classList.toggle('hidden', !tabHtml);
+  }
+  $('#st-secs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sec]');
+    if (b && b.dataset.sec !== S.sec) go(b.dataset.sec);
+  });
   $('#st-tabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-tab]');
     if (!b) return;
     S.tab = b.dataset.tab;
-    $$('#st-tabs button').forEach((x) => x.classList.toggle('on', x === b));
+    S.secTab[S.sec] = S.tab;
     render();
   });
 
@@ -235,13 +292,14 @@
   function renderStudent() {
     const me = S.users[S.uid];
     if (!me) return;
-    $('#st-brand').innerHTML = `${emblem('gold')}${esc(S.className || '클래스')} 티어`;
+    $('#st-brand').innerHTML = `${emblem('gold')}<span class="brand-txt">${esc(S.className || '클래스')} 티어</span>`;
     $('#st-me').innerHTML = nameTag(S.uid);
-    const pending = Object.values(S.myEntries).filter((e) => e.status === 'pending').length;
-    const sb = $('#st-tabs [data-tab="submit"]');
-    sb.innerHTML = `✍️ 기록하기${pending ? `<span class="cnt">${pending}</span>` : ''}`;
+    renderStudentNav();
     const main = $('#st-main');
     if (S.tab === 'hanja') { if (window.HanjaStudy) window.HanjaStudy.render(main); return; }
+    for (const mod of ['EconStudent', 'QuestStudent', 'BoardStudent']) {
+      if (window[mod] && window[mod].handles(S.tab)) { main.dataset.tab = S.tab; main.dataset.key = ''; window[mod].render(main, S.tab); return; }
+    }
     const fn = { home: stHome, rank: stRank, submit: stSubmit, mine: stMine, fame: stFame }[S.tab];
     // 입력 중인 폼은 다시 그리지 않음 (선택지가 바뀐 경우에만 다시 그림)
     const formKey = JSON.stringify([S.pick, Object.keys(S.openUnits || {}), S.myLevels, Object.values(S.myEntries).filter((e) => e.status !== 'rejected').map((e) => [e.cat, e.aid || '', e.status, e.ts])]);
@@ -276,7 +334,8 @@
         const lid = s.champion === S.uid ? 'champion' : r.tier;
         last = `<div class="last-reward"><div class="muted" style="font-size:.85em">${esc(T.monthLabel(lk))} 확정 결과</div>
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:4px">${tierChip(lid)}<span>반 ${r.rank}위 · ${r.score}점</span></div>
-          ${rw && rw.text ? `<div style="margin-top:6px">🎁 보상: <b>${esc(rw.text)}</b> ${rw.given ? '<span class="pill good">받음</span>' : '<span class="pill warn">받을 예정</span>'}</div>` : ''}</div>`;
+          ${rw && rw.text ? `<div style="margin-top:6px">🎁 보상: <b>${esc(rw.text)}</b> ${rw.given ? '<span class="pill good">받음</span>' : '<span class="pill warn">받을 예정</span>'}</div>` : ''}
+          ${rw && rw.money && window.Econ ? `<div style="margin-top:6px">💰 보상금: <b>${window.Econ.won(rw.money)}</b> ${s.paidAt ? '<span class="pill good">받음</span>' : '<span class="pill warn">받을 예정</span>'}</div>` : ''}</div>`;
       }
     }
     return `
@@ -293,6 +352,7 @@
         </div>
         ${last}
       </div>
+      ${window.EconStudent ? window.EconStudent.homeCard() : ''}
       <div class="grid3" style="margin-top:16px">
         <div class="stat"><div class="k">경쟁 활동 (수행평가·대회)</div><div class="v ${d && d.comp > 0 ? 'up' : d && d.comp < 0 ? 'down' : ''}">${d ? signed(d.comp) : 0}</div></div>
         <div class="stat"><div class="k">생활 점수 (칭찬·독서·과제·역할)</div><div class="v ${d && d.accum > 0 ? 'up' : d && d.accum < 0 ? 'down' : ''}">${d ? signed(d.accum) : 0}</div></div>
@@ -495,7 +555,7 @@
 
   window.App = {
     S, B, T, $, $$, esc, emblem, tierChip, tierName, nameTag, nameOf, badgeTier, liveTier, lastSeasonKey,
-    toast, modal, confirmBox, fmtDate, fmtTime, signed, settings, curMonth, render, show, logout,
+    toast, modal, confirmBox, fmtDate, fmtTime, signed, settings, curMonth, render, show, logout, go,
   };
   window.addEventListener('DOMContentLoaded', boot);
 })();
