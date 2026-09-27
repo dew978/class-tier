@@ -132,7 +132,16 @@
           ".validate": "newData.hasChildren(['d', 'n']) && newData.child('d').isNumber() && newData.child('n').isNumber()"
         },
         "grade": { ".validate": "newData.isString() && newData.val().length <= 4" },
-        "avatar": { ".validate": "newData.hasChildren(['style', 'seed'])" },
+        "avatar": {
+          ".write": "{{AVATARW}}",
+          ".validate": "newData.hasChildren(['style', 'seed'])"
+        },
+        "avs": {
+          "$aid": {
+            ".write": "{{AVSW}}",
+            ".validate": "newData.hasChildren(['style', 'seed']) && newData.child('style').isString() && newData.child('style').val().length <= 30"
+          }
+        },
         "$other": { ".validate": false }
       }
     },
@@ -219,7 +228,163 @@
       ".write": "{{T}}",
       "$qid": {
         "$uid": {
-          ".read": "auth != null && auth.uid === $uid"
+          ".read": "auth != null && auth.uid === $uid",
+          "$per": {
+            ".write": "{{SELF}} && ((!data.exists() && {{QREQ}}) || (data.exists() && data.child('st').val() === 'no' && {{QREQ}}) || (data.exists() && data.child('st').val() === 'req' && !newData.exists()))",
+            ".validate": "newData.hasChildren(['st', 't'])",
+            "st": { ".validate": "newData.val() === 'req' || newData.val() === 'ok' || newData.val() === 'no'" },
+            "t": { ".validate": "newData.isNumber()" },
+            "txt": { ".validate": "newData.isString() && newData.val().length <= 500" },
+            "img": { ".validate": "newData.val() === true" },
+            "rt": { ".validate": "newData.isNumber()" },
+            "why": { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "lid": { ".validate": "newData.isString()" },
+            "imp": { ".validate": "newData.val() === true" },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    },
+    "qimg": {
+      ".read": "{{T}}",
+      ".write": "{{T}}",
+      "$qid": {
+        "$uid": {
+          "$per": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "{{QIMGW}}"
+          }
+        }
+      }
+    },
+
+    "boards": {
+      ".read": "{{TM}}",
+      ".write": "{{T}}"
+    },
+    "bposts": {
+      ".read": "{{T}}",
+      ".write": "{{T}}",
+      "$bid": {
+        ".read": "{{BSEE}}",
+        "$pid": {
+          ".write": "{{BPOSTW}}",
+          ".validate": "newData.hasChildren(['u', 't']) && newData.child('u').isString() && newData.child('t').isNumber()",
+          "u": { ".validate": true },
+          "t": { ".validate": true },
+          "e": { ".validate": "newData.isNumber()" },
+          "ti": { ".validate": "newData.isString() && newData.val().length <= 60" },
+          "tx": { ".validate": "newData.isString() && newData.val().length <= 2000" },
+          "img": { ".validate": "newData.val() === true" },
+          "col": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 10" },
+          "clr": { ".validate": "newData.isString() && newData.val().length <= 10" },
+          "pin": { ".validate": "newData.isBoolean()" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+    "bpend": {
+      ".read": "{{T}}",
+      ".write": "{{T}}",
+      "$bid": {
+        ".read": "{{M}} && query.orderByChild === 'u' && query.equalTo === auth.uid",
+        ".indexOn": ["u"],
+        "$pid": {
+          ".read": "auth != null && data.child('u').val() === auth.uid",
+          ".write": "{{BPENDW}}",
+          ".validate": "newData.hasChildren(['u', 't']) && newData.child('u').isString() && newData.child('t').isNumber()",
+          "u": { ".validate": true },
+          "t": { ".validate": true },
+          "e": { ".validate": "newData.isNumber()" },
+          "ti": { ".validate": "newData.isString() && newData.val().length <= 60" },
+          "tx": { ".validate": "newData.isString() && newData.val().length <= 2000" },
+          "img": { ".validate": "newData.val() === true" },
+          "col": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 10" },
+          "clr": { ".validate": "newData.isString() && newData.val().length <= 10" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+    "bimg": {
+      ".read": "{{T}}",
+      ".write": "{{T}}",
+      "$bid": {
+        "$pid": {
+          ".read": "{{BSEE}} || (auth != null && root.child('bpend/' + $bid + '/' + $pid + '/u').val() === auth.uid)",
+          ".write": "{{BIMGW}}"
+        }
+      }
+    },
+    "bcmt": {
+      ".read": "{{T}}",
+      ".write": "{{T}}",
+      "$bid": {
+        ".read": "{{BSEE}}",
+        "$pid": {
+          ".write": "{{BWITHPOST}}",
+          "$cid": {
+            ".write": "{{BCMTW}}",
+            ".validate": "newData.hasChildren(['u', 't', 'tx'])",
+            "u": { ".validate": "newData.isString()" },
+            "t": { ".validate": "newData.isNumber()" },
+            "tx": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 300" },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    },
+    "brx": {
+      ".read": "{{T}}",
+      ".write": "{{T}}",
+      "$bid": {
+        ".read": "{{BSEE}}",
+        "$pid": {
+          ".write": "{{BWITHPOST}}",
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && {{BSEE}} && {{BRD}}.child('rx').val() !== false && root.child('bposts/' + $bid + '/' + $pid).exists()",
+            ".validate": "newData.isString() && newData.val().length <= 8"
+          }
+        }
+      }
+    },
+    "btopic": {
+      ".read": "{{TM}}",
+      ".write": "{{T}}"
+    },
+    "bwrite": {
+      ".read": "{{T}}",
+      ".write": "{{T}}",
+      "$bid": {
+        ".read": "{{BSEE}} && {{BRD}}.child('share').val() === true",
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          "$tid": {
+            ".write": "{{BWRITEW}}",
+            ".validate": "newData.hasChildren(['t', 'st'])",
+            "tx": { ".validate": "newData.isString() && newData.val().length <= 5000" },
+            "ti": { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "img": { ".validate": "newData.val() === true" },
+            "t": { ".validate": "newData.isNumber()" },
+            "e": { ".validate": "newData.isNumber()" },
+            "st": { ".validate": "newData.val() === 'wait' || newData.val() === 'ok' || newData.val() === 'back'" },
+            "fb": { ".validate": "newData.isString() && newData.val().length <= 500" },
+            "rt": { ".validate": "newData.isNumber()" },
+            "lid": { ".validate": "newData.isString()" },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    },
+    "bwimg": {
+      ".read": "{{T}}",
+      ".write": "{{T}}",
+      "$bid": {
+        ".read": "{{BSEE}} && {{BRD}}.child('share').val() === true",
+        "$uid": {
+          "$tid": {
+            ".read": "auth != null && auth.uid === $uid",
+            ".write": "{{BWIMGW}}"
+          }
         }
       }
     }

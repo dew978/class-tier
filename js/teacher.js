@@ -18,7 +18,7 @@
     { k: 'home', name: '🏠 학급 홈', tabs: ['home'] },
     { k: 'tier', name: '🏆 티어', tabs: ['board', 'approve', 'acts', 'praise', 'levels', 'close'] },
     { k: 'econ', name: '💰 경제', tabs: ['shop', 'jobs', 'bank', 'feed', 'stats', 'econset'] },
-    { k: 'quest', name: '🎯 퀘스트', tabs: ['quest'] },
+    { k: 'quest', name: '🎯 퀘스트', tabs: ['qreq', 'quest'] },
     { k: 'board', name: '📌 판', tabs: ['boards'] },
     { k: 'admin', name: '⚙️ 관리', tabs: ['students', 'settings', 'import'] },
   ];

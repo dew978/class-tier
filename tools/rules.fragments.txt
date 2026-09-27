@@ -155,8 +155,27 @@ root.child('market/' + newData.child('s').val())
  && {{FA}} > newData.child('q').val() * newData.child('p').val() - 1
  && newData.child('c').isNumber() && newData.child('c').val() >= 0
  && {{NHQ}} !== {{OHQ}} && {{TRADE}})
+# 아바타 구매: 값 = 선생님이 정한 그 모양의 가격, 새 아바타가 내 아바타 목록에 함께 생김
+@OP_AV
+(newData.child('k').val() === 'av' && {{IOK}} && {{SOK}} && {{SHOPON}} && root.child('config/econ/av/on').val() === true
+ && root.child('config/econ/av/styles/' + newData.child('s').val()).isNumber()
+ && {{FA}} === 0 - root.child('config/econ/av/styles/' + newData.child('s').val()).val()
+ && !{{ACC0}}.child('avs/' + newData.child('i').val()).exists()
+ && {{ACC}}.child('avs/' + newData.child('i').val() + '/style').val() === newData.child('s').val()
+ && {{CASHNN}})
 @STUOP
-({{OP_BUY}} || {{OP_USE}} || {{OP_GRP}} || {{OP_DEP}} || {{OP_WD}} || {{OP_SBUY}} || {{OP_SSELL}})
+({{OP_BUY}} || {{OP_USE}} || {{OP_GRP}} || {{OP_DEP}} || {{OP_WD}} || {{OP_SBUY}} || {{OP_SSELL}} || {{OP_AV}})
+# acct/$uid/avs/$aid : 산 아바타 (기록과 같은 모양)
+@AVSW
+({{SELF}} && newData.exists() && !data.exists() && {{FRESHA4}} && {{EA4}}.child('k').val() === 'av' && {{EA4}}.child('i').val() === $aid
+ && newData.child('style').val() === {{EA4}}.child('s').val() && newData.child('seed').isString() && newData.child('seed').val().length <= 40)
+# acct/$uid/avatar : 가진 아바타 중 하나(또는 기본 아바타)로 바꾸기
+@AVATARW
+({{SELF}} && newData.exists() && newData.child('id').isString()
+ && ((newData.child('id').val() === 'base' && newData.child('style').val() === 'thumbs' && newData.child('seed').val() === $uid)
+  || (newData.parent().child('avs/' + newData.child('id').val()).exists()
+   && newData.child('style').val() === newData.parent().child('avs/' + newData.child('id').val() + '/style').val()
+   && newData.child('seed').val() === newData.parent().child('avs/' + newData.child('id').val() + '/seed').val())))
 
 # ── 함께 바뀌는 곳의 계산 검사 (학생 쓰기) ──
 # acct/$uid/items/$iid : 구매면 +개수(보유 한도 이하), 사용이면 −개수
@@ -216,6 +235,79 @@ root.child('market/' + {{EA3}}.child('s').val())
 @RAISEW
 ({{M}} && newData.exists() && {{FRESH4}} && {{E4}}.child('k').val() === 'grp' && {{E4}}.child('i').val() === $iid
  && ((data.exists() && newData.val() === data.val() - {{E4}}.child('a').val()) || (!data.exists() && newData.val() === 0 - {{E4}}.child('a').val())))
+
+# ── 퀘스트: 학생은 「완료 요청」만 (보상은 선생님이 승인할 때 지급) ──
+# 기간 키: 한 번 = once, 매일 = d{한국 날짜 번호}, 매주 = w{주 번호(월요일 시작)}
+@KWEEK
+(({{KDAY}} + 3 - ({{KDAY}} + 3) % 7) / 7)
+@QREF
+root.child('quests/' + $qid)
+@QREQ
+(newData.child('st').val() === 'req' && newData.child('t').val() === now
+ && {{QREF}}.child('on').val() === true
+ && (!{{QREF}}.child('to').exists() || {{QREF}}.child('to/' + $uid).val() === true)
+ && (!{{QREF}}.child('s').exists() || now >= {{QREF}}.child('s').val())
+ && (!{{QREF}}.child('e').exists() || now <= {{QREF}}.child('e').val())
+ && (({{QREF}}.child('rep').val() === 'daily' && $per === 'd' + {{KDAY}} && (!{{QREF}}.child('days').exists() || {{QREF}}.child('days/' + {{KWD}}).val() === true))
+  || ({{QREF}}.child('rep').val() === 'weekly' && $per === 'w' + {{KWEEK}})
+  || ({{QREF}}.child('rep').val() !== 'daily' && {{QREF}}.child('rep').val() !== 'weekly' && $per === 'once'))
+ && (!{{QREF}}.child('cap').exists() || !{{QREF}}.child('cnt/' + $per).exists() || {{QREF}}.child('cnt/' + $per).val() < {{QREF}}.child('cap').val())
+ && ({{QREF}}.child('proof').val() !== 'text' || newData.child('txt').val().length >= 2)
+ && ({{QREF}}.child('proof').val() !== 'photo' || (newData.child('img').val() === true && {{NR4}}.child('qimg/' + $qid + '/' + $uid + '/' + $per).exists()))
+ && !newData.child('rt').exists() && !newData.child('lid').exists() && !newData.child('why').exists() && !newData.child('imp').exists())
+@QIMGW
+({{SELF}} && ((newData.exists() && newData.isString() && newData.val().length <= 300000 && newData.val().beginsWith('data:image/')
+    && {{NR4}}.child('qprog/' + $qid + '/' + $uid + '/' + $per + '/st').val() === 'req' && {{NR4}}.child('qprog/' + $qid + '/' + $uid + '/' + $per + '/t').val() === now)
+  || (!newData.exists() && !{{NR4}}.child('qprog/' + $qid + '/' + $uid + '/' + $per).exists())))
+
+# ── 판(게시판)과 글쓰기 판 ──
+@BRD
+root.child('boards/' + $bid)
+# 학생이 이 판을 볼 수 있는지 (보이기 + 대상)
+@BSEE
+({{M}} && {{BRD}}.exists() && {{BRD}}.child('vis').val() !== false && (!{{BRD}}.child('to').exists() || {{BRD}}.child('to/' + auth.uid).val() === true))
+@BIMGOK
+(!newData.child('img').exists() || {{BRD}}.child('img').val() !== false)
+# 자유 판 글: 새 글 / 내 글 고치기(작성 시각·고정 그대로, 고친 시각 = 지금) / 내 글 지우기
+@BPOSTOP
+((!data.exists() && newData.child('u').val() === auth.uid && newData.child('t').val() === now && !newData.child('pin').exists() && !newData.child('e').exists() && {{BIMGOK}})
+ || (data.exists() && data.child('u').val() === auth.uid && newData.exists() && newData.child('u').val() === auth.uid && newData.child('t').val() === data.child('t').val() && newData.child('pin').val() === data.child('pin').val() && newData.child('e').val() === now && {{BIMGOK}})
+ || (data.exists() && data.child('u').val() === auth.uid && !newData.exists()))
+@BPOSTW
+({{BSEE}} && {{BRD}}.child('ty').val() !== 'write' && {{BRD}}.child('lock').val() !== true && {{BRD}}.child('appr').val() !== true && {{BPOSTOP}})
+# 선생님 확인 뒤 공개하는 판: 확인 전 글은 bpend 에 (쓴 학생과 선생님만 읽음)
+@BPENDW
+({{BSEE}} && {{BRD}}.child('ty').val() !== 'write' && {{BRD}}.child('lock').val() !== true && {{BRD}}.child('appr').val() === true && {{BPOSTOP}})
+# 글 사진: 이번 쓰기에서 내 글에 사진 표시가 있을 때만 / 내 글의 사진 지우기
+@BIMGW
+({{M}} && ((newData.exists() && newData.isString() && newData.val().length <= 300000 && newData.val().beginsWith('data:image/')
+     && (({{NR3}}.child('bposts/' + $bid + '/' + $pid + '/u').val() === auth.uid && {{NR3}}.child('bposts/' + $bid + '/' + $pid + '/img').val() === true)
+      || ({{NR3}}.child('bpend/' + $bid + '/' + $pid + '/u').val() === auth.uid && {{NR3}}.child('bpend/' + $bid + '/' + $pid + '/img').val() === true)))
+  || (!newData.exists() && (root.child('bposts/' + $bid + '/' + $pid + '/u').val() === auth.uid || root.child('bpend/' + $bid + '/' + $pid + '/u').val() === auth.uid))))
+# 댓글: 댓글 켜진 판의 공개된 글에 새 댓글 / 내 댓글 지우기
+@BCMTW
+({{BSEE}} && {{BRD}}.child('cmt').val() !== false && root.child('bposts/' + $bid + '/' + $pid).exists()
+ && ((!data.exists() && newData.child('u').val() === auth.uid && newData.child('t').val() === now)
+  || (data.exists() && data.child('u').val() === auth.uid && !newData.exists())))
+# 내 글을 지울 때 그 글의 댓글·반응도 함께 지우기
+@BWITHPOST
+({{M}} && !newData.exists() && root.child('bposts/' + $bid + '/' + $pid + '/u').val() === auth.uid && !{{NR3}}.child('bposts/' + $bid + '/' + $pid).exists())
+# 글쓰기 판: 주제가 열려 있는 동안 내 글 쓰기·고치기(확인 중이거나 다시 쓰기일 때만), 선생님 의견은 그대로
+@TOP
+root.child('btopic/' + $bid + '/' + $tid)
+@BWRITEW
+({{SELF}} && {{BSEE}} && {{BRD}}.child('ty').val() === 'write' && {{TOP}}.exists()
+ && (!{{TOP}}.child('s').exists() || now >= {{TOP}}.child('s').val()) && (!{{TOP}}.child('e').exists() || now <= {{TOP}}.child('e').val())
+ && (!{{TOP}}.child('to').exists() || {{TOP}}.child('to/' + $uid).val() === true)
+ && newData.exists() && newData.child('st').val() === 'wait' && newData.child('e').val() === now
+ && (!newData.child('img').exists() || {{TOP}}.child('img').val() === true)
+ && ((!data.exists() && newData.child('t').val() === now)
+  || (data.exists() && (data.child('st').val() === 'wait' || data.child('st').val() === 'back') && newData.child('t').val() === data.child('t').val()))
+ && newData.child('fb').val() === data.child('fb').val() && !newData.child('rt').exists() && !newData.child('lid').exists()
+ && (!{{TOP}}.child('min').exists() || newData.child('tx').val().length >= {{TOP}}.child('min').val()))
+@BWIMGW
+({{SELF}} && newData.isString() && newData.val().length <= 300000 && newData.val().beginsWith('data:image/')
+ && {{NR4}}.child('bwrite/' + $bid + '/' + $uid + '/' + $tid + '/img').val() === true && {{NR4}}.child('bwrite/' + $bid + '/' + $uid + '/' + $tid + '/e').val() === now)
 
 # ── 티어 기록(entries): 학생 제출·자동 기록 ──
 @ENTRY_STUDENT

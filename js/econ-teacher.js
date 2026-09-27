@@ -16,8 +16,15 @@
     if (recentUnsub) recentUnsub();
     recentUnsub = B.on('feed', (v) => { recent = v || {}; A.render(); }, { key: true, last: recentLimit });
   }
+  // 경제 설정이 없으면 기본값으로 만들고, 나중에 생긴 항목(아바타 상점 등)은 채워 넣음
   async function ensureConfig() {
-    try { if (!(await B.get('config/econ'))) await B.set('config/econ', E.DEFAULTS); } catch (e) { console.warn('경제 설정 만들기 실패', e); }
+    try {
+      const cur = await B.get('config/econ');
+      if (!cur) { await B.set('config/econ', E.DEFAULTS); return; }
+      const miss = {};
+      for (const k of ['bank', 'trade', 'menus', 'av', 'cats']) if (!cur[k]) miss[`config/econ/${k}`] = E.DEFAULTS[k];
+      if (Object.keys(miss).length) await B.update('', miss);
+    } catch (e) { console.warn('경제 설정 만들기 실패', e); }
   }
   const pendingUses = () => E.toList(recent).filter((e) => e.k === 'use' && !marks[e.id] && S.users[e.u]).reverse();
 
@@ -665,8 +672,8 @@
 
   /* ───────────── 활동 기록 ───────────── */
   let fWho = '', fKind = '', fText = '', whoFeed = null, whoUnsub = null, whoFor = '';
-  const KIND_GROUPS = { '': '전체', money: '보내기·받기', wage: '급여·상금·보상', shop: '구매·사용', bank: '예금', stock: '주식', gov: '국고' };
-  const inGroup = (e, g) => !g || (g === 'money' ? ['send', 'take', 'adj', 'imp'].includes(e.k) : g === 'wage' ? ['wage', 'prize', 'reward', 'quest'].includes(e.k)
+  const KIND_GROUPS = { '': '전체', money: '보내기·받기', wage: '급여·상금·보상·퀘스트', shop: '구매·사용', bank: '예금', stock: '주식', gov: '국고' };
+  const inGroup = (e, g) => !g || (g === 'money' ? ['send', 'take', 'adj', 'imp'].includes(e.k) : g === 'wage' ? ['wage', 'prize', 'reward', 'quest', 'write'].includes(e.k)
     : g === 'shop' ? ['buy', 'use', 'grp', 'ref', 'item'].includes(e.k) : g === 'bank' ? ['dep', 'wd'].includes(e.k) : g === 'stock' ? ['sbuy', 'ssell'].includes(e.k) : e.u === E.GOV);
   TC.addTab('feed', '활동 기록', () => {
     main().innerHTML = `<div class="a-head"><h2>활동 기록</h2><span class="muted" id="fd-cnt"></span><span class="sp"></span>
@@ -778,6 +785,10 @@
             <label>학급 증권 시작<input id="es-cs" type="time" value="${E.hhmm(c.trade.cs)}"></label><label>학급 증권 끝<input id="es-ce" type="time" value="${E.hhmm(c.trade.ce)}"></label>
             <label>하루 최대 거래 (회)<input id="es-max" type="number" min="1" max="200" value="${c.trade.max}"></label></div>
           <p class="note">실제 주식은 평일에만, 시세가 30분 안에 받아진 경우에만 거래돼요.</p></div>
+        <div class="panel"><h3>🙂 아바타 상점</h3><label class="chk-line"><input type="checkbox" class="chk" id="es-avon" ${c.av.on ? 'checked' : ''}> 아바타 팔기 (학생 「상점 → 아바타 상점」)</label>
+          <div class="form-grid"><label>하루에 보여 줄 얼굴 수<input id="es-avn" type="number" min="4" max="24" value="${c.av.n || 12}"></label></div>
+          <h4>모양별 가격 <span class="muted" style="font-weight:400">비우면 팔지 않음 · 산 돈은 사라져요(소각)</span></h4>
+          ${E.AV_STYLES.map((s) => `<div class="av-price-row"><img src="${E.avatarUrl(s, 'class-tier')}" alt="" loading="lazy"><span>${esc(E.STYLE_NAMES[s] || s)}</span><input type="number" min="0" step="10000" data-avp="${s}" value="${c.av.styles[s] ?? ''}" placeholder="팔지 않음"></div>`).join('')}</div>
         <div class="panel"><h3>🏛️ 국고</h3><div class="stat"><div class="k">지금 국고</div><div class="v">${E.won((S.gov && S.gov.cash) || 0)}</div></div>
           <div class="foot"><button class="btn sm" id="es-gov">국고 조정</button></div></div>
       </div></div>`;
@@ -801,6 +812,9 @@
       raw.bank = { on: $('#es-bon').checked, days: Math.max(1, Math.min(60, Math.floor(Number(v('#es-days')) || 7))), min: Math.max(1, Math.floor(Number(v('#es-min')) || 1000)), rates, def: rates[v('#es-def')] !== undefined ? v('#es-def') : Object.keys(rates)[0] };
       raw.trade = { on: $('#es-ton').checked, rs: E.toMin(v('#es-rs')), re: E.toMin(v('#es-re')), cs: E.toMin(v('#es-cs')), ce: E.toMin(v('#es-ce')), max: Math.max(1, Math.floor(Number(v('#es-max')) || 30)) };
       if (raw.trade.rs >= raw.trade.re || raw.trade.cs > raw.trade.ce) return toast('거래 시작 시각이 끝 시각보다 빨라야 해요.', 'bad');
+      const styles = {};
+      $$('[data-avp]').forEach((i) => { if (i.value.trim() !== '') styles[i.dataset.avp] = Math.max(0, Math.floor(Number(i.value) || 0)); });
+      raw.av = { on: $('#es-avon').checked, n: Math.max(4, Math.min(24, Math.floor(Number($('#es-avn').value) || 12))), styles };
       await B.set('config/econ', raw);
       toast('저장했어요.', 'good');
     };

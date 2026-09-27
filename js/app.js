@@ -12,7 +12,7 @@
     subs: [], detailSubs: {}, screen: null, sec: 'tier', tab: 'home', secTab: {}, pick: 'unit', mineMonth: null,
     myLevels: {}, hanja: null, openUnits: {},
     // 학급 경제
-    econRaw: null, acct: null, accts: {}, store: {}, storeContrib: {}, jobs: {}, market: {}, gov: null, quests: {},
+    econRaw: null, acct: null, accts: {}, store: {}, storeContrib: {}, jobs: {}, market: {}, gov: null, quests: {}, boards: {},
   };
   const settings = () => T.mergeSettings(S.settingsRaw);
   const curMonth = () => T.monthKey(B.now());
@@ -224,10 +224,10 @@
     if (window.Teacher) window.Teacher.leave();
     $('#modal-root').innerHTML = '';
     if (window.HanjaStudy) window.HanjaStudy.reset();
-    if (window.EconStudent) window.EconStudent.reset();
+    for (const m of ['EconStudent', 'QuestStudent', 'BoardStudent']) if (window[m]) window[m].reset();
     Object.assign(S, {
       uid: null, isTeacher: false, subs: [], detailSubs: {}, users: {}, standings: {}, seasons: {}, myEntries: {}, myDetail: {}, mineMonth: null, myLevels: {}, hanja: null, openUnits: {},
-      econRaw: null, acct: null, accts: {}, store: {}, storeContrib: {}, jobs: {}, market: {}, gov: null, quests: {}, secTab: {},
+      econRaw: null, acct: null, accts: {}, store: {}, storeContrib: {}, jobs: {}, market: {}, gov: null, quests: {}, boards: {}, secTab: {},
     });
   }
   async function logout() { await B.signOut(); }

@@ -198,7 +198,11 @@
           for (const it of s.items) upd[`acct/${u}/items/${itemId[norm(it.item)]}`] = it.qty;
         }
         if (o.grade && s.grade) upd[`acct/${u}/grade`] = s.grade;
-        if (o.av && s.avatar) upd[`acct/${u}/avatar`] = { style: s.avatar.style, seed: s.avatar.seed };
+        if (o.av && s.avatar) {
+          // 수페 아바타는 「내 아바타」에도 넣어 두어 다른 아바타로 바꿨다가 다시 돌아올 수 있게
+          upd[`acct/${u}/avs/imp`] = { style: s.avatar.style, seed: s.avatar.seed };
+          upd[`acct/${u}/avatar`] = { style: s.avatar.style, seed: s.avatar.seed, id: 'imp' };
+        }
         if (o.q) for (const t of s.questsDone || []) upd[`qprog/${questId[norm(t)]}/${u}/once`] = { st: 'ok', t: B.ts(), imp: true };
         // dep/hold를 한 번 지우고 다시 쓰는 것을 한 번에 하면 겹치므로 먼저 지움
         const clear = {};

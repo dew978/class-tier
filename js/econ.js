@@ -15,6 +15,8 @@
     bank: { on: true, days: 7, min: 1000, rates: { S: 2, A: 1.5, B: 1 }, def: 'B' },
     trade: { on: true, rs: 540, re: 930, cs: 0, ce: 1439, max: 30 },
     menus: { shop: true, jobs: true, bank: true, stock: true, quest: true, board: true },
+    // 아바타 상점: 모양별 가격 (없으면 팔지 않음), 하루에 보여 줄 후보 수
+    av: { on: true, n: 12, styles: { thumbs: 100000, 'fun-emoji': 150000, 'big-smile': 200000, 'lorelei-neutral': 200000, 'notionists-neutral': 200000, 'adventurer-neutral': 300000, 'croodles-neutral': 300000, 'bottts-neutral': 300000, 'pixel-art-neutral': 400000, dylan: 500000 } },
   };
   function cfg() {
     const c = JSON.parse(JSON.stringify(DEFAULTS));
@@ -26,6 +28,8 @@
     if (r.bank) { Object.assign(c.bank, r.bank); if (r.bank.rates) c.bank.rates = Object.assign({}, r.bank.rates); }
     if (r.trade) Object.assign(c.trade, r.trade);
     if (r.menus) Object.assign(c.menus, r.menus);
+    if (r.av) { c.av.on = r.av.on !== false; if (r.av.n) c.av.n = r.av.n; c.av.styles = Object.assign({}, r.av.styles || {}); }
+    else c.av.on = false;
     c.imported = r.imported || null;
     c.lastPay = r.lastPay || null;
     return c;
@@ -46,6 +50,7 @@
 
   /* ── 아바타 (DiceBear, 수페에서 쓰던 모양 그대로) ── */
   const AV_STYLES = ['thumbs', 'lorelei-neutral', 'notionists-neutral', 'big-smile', 'croodles-neutral', 'adventurer-neutral', 'fun-emoji', 'bottts-neutral', 'pixel-art-neutral', 'dylan', 'icons', 'shapes', 'rings', 'identicon', 'initials'];
+  const STYLE_NAMES = { thumbs: '엄지', 'lorelei-neutral': '로렐라이', 'notionists-neutral': '스케치', 'big-smile': '큰 웃음', 'croodles-neutral': '낙서', 'adventurer-neutral': '모험가', 'fun-emoji': '이모지', 'bottts-neutral': '로봇', 'pixel-art-neutral': '픽셀', dylan: '딜런', icons: '아이콘', shapes: '도형', rings: '고리', identicon: '무늬', initials: '글자' };
   function acctOf(uid) {
     if (uid === S.uid && !S.isTeacher) return S.acct || {};
     return (S.accts && S.accts[uid]) || {};
@@ -85,7 +90,7 @@
     send: ['💰', '선생님이 보낸 돈'], take: ['📤', '선생님이 가져간 돈'], wage: ['💼', '급여'], prize: ['🏅', '상금'], reward: ['🏆', '티어 보상금'],
     adj: ['🛠️', '잔액 조정'], item: ['🎁', '아이템 조정'], imp: ['📥', '가져온 잔액'], buy: ['🛒', '구매'], use: ['✨', '아이템 사용'],
     grp: ['🤝', '공동구매 참여'], ref: ['↩️', '공동구매 환불'], dep: ['🏦', '예금 가입'], wd: ['🏦', '예금 찾기'], sbuy: ['📈', '주식 매수'],
-    ssell: ['📉', '주식 매도'], quest: ['🎯', '퀘스트 보상'], tax: ['🧾', '소득세'], gsend: ['🏛️', '국고 지출'], gtake: ['🏛️', '국고 수입'], gadj: ['🏛️', '국고 조정'],
+    ssell: ['📉', '주식 매도'], quest: ['🎯', '퀘스트 보상'], write: ['✏️', '글쓰기 통과'], av: ['🙂', '아바타 구매'], tax: ['🧾', '소득세'], gsend: ['🏛️', '국고 지출'], gtake: ['🏛️', '국고 수입'], gadj: ['🏛️', '국고 조정'],
   };
   function describe(e) {
     const [ic, base] = KINDS[e.k] || ['•', e.k];
@@ -104,7 +109,9 @@
       case 'wd': t = e.a > (e.p || 0) ? '예금 만기 (원금 + 이자)' : '예금 찾기 (중도 해지)'; if (e.a > (e.p || 0)) sub = `이자 ${won(e.a - e.p)}`; break;
       case 'sbuy': t = `${e.n || '주식'} ${qty(e.q)}주 매수`; sub = `1주 ${won(e.p)}`; break;
       case 'ssell': t = `${e.n || '주식'} ${qty(e.q)}주 매도`; sub = `1주 ${won(e.p)} · 손익 ${swon(e.a - (e.c || 0))}`; break;
-      case 'quest': t = `퀘스트 보상${e.n ? ` · ${e.n}` : ''}`; break;
+      case 'quest': t = `퀘스트 보상${e.n ? ` · ${e.n}` : ''}`; sub = [e.m, e.i && e.q ? `아이템 +${e.q}개` : ''].filter(Boolean).join(' · '); break;
+      case 'write': t = `글쓰기 통과${e.n ? ` · ${e.n}` : ''}`; sub = e.m || ''; break;
+      case 'av': t = '아바타 구매'; sub = e.s || ''; break;
       case 'tax': t = e.m || '소득세'; break;
       case 'gsend': case 'gtake': t = e.m || base; break;
       case 'imp': t = e.m || base; break;
@@ -300,6 +307,22 @@
       return commit(upd, `${n}명에게 환불했어요.`);
     },
     markUse(lid, done) { return B.set(`feedMark/${lid}`, done ? { done: B.ts() } : null); },
+    // 아바타 사서 바로 쓰기 / 가진 아바타로 바꾸기 (id 'base' = 기본 아바타)
+    buyAvatar(style, seed) {
+      const price = cfg().av.styles[style];
+      const aid = B.newKey();
+      const upd = {};
+      addOp(upd, S.uid, { k: 'av', a: -price, i: aid, s: style, n: '아바타' });
+      upd[`acct/${S.uid}/avs/${aid}`] = { style, seed };
+      upd[`acct/${S.uid}/avatar`] = { style, seed, id: aid };
+      return commit(upd, '새 아바타를 샀어요! 바로 바꿨어요.');
+    },
+    equipAvatar(id) {
+      const a = S.acct || {};
+      const av = id === 'base' ? { style: 'thumbs', seed: S.uid } : a.avs && a.avs[id];
+      if (!av) return Promise.resolve(false);
+      return commit({ [`acct/${S.uid}/avatar`]: { style: av.style, seed: av.seed, id } }, '아바타를 바꿨어요.');
+    },
   };
 
   /* ── 통계 ── 학생 돈 기준 발행(새로 생긴 돈)·소각(사라진 돈)과 사유 */
@@ -311,10 +334,12 @@
       case 'wage': return [['급여', e.g || a]];
       case 'prize': case 'reward': return [['보상·상금', e.g || a]];
       case 'quest': return [['퀘스트 보상', a]];
+      case 'write': return [['글쓰기 보상', a]];
       case 'ref': return [['환불', a]];
       case 'adj': return [['조정', a]];
       case 'buy': return [['상점 구매', a]];
       case 'grp': return [['공동구매', a]];
+      case 'av': return [['아바타 구매', a]];
       case 'wd': return a > (e.p || 0) ? [['은행 이자', a - (e.p || 0)]] : [];
       case 'ssell': { const pl = a - (e.c || 0); return pl > 0 ? [['주식 이익', pl]] : pl < 0 ? [['주식 손실', pl]] : []; }
       default: return [];
@@ -348,7 +373,7 @@
 
   window.Econ = {
     GOV, DAY, DEFAULTS, cfg, grades, num, won, swon, qty, kday, kmin, kwd, hhmm, toMin,
-    AV_STYLES, avatar, avatarUrl, acctOf, depMat, price, worth, itemCount, withBalance, toList, describe, KINDS,
+    AV_STYLES, STYLE_NAMES, avatar, avatarUrl, acctOf, depMat, price, worth, itemCount, withBalance, toList, describe, KINDS,
     addOp, commit, ops, taxOf, stats, flows,
   };
 })();

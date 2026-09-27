@@ -92,16 +92,45 @@
   }
 
   /* ── 상점 ── */
+  let shopMode = 'item', avStyle = null;
   function shop() {
     const c = E.cfg();
     const a = me();
+    const avOn = c.av.on && Object.values(c.av.styles).some((p) => typeof p === 'number');
+    const modes = avOn ? `<div class="seg" style="margin-bottom:12px"><button data-sm="item" class="${shopMode !== 'av' ? 'on' : ''}">🎁 아이템 상점</button><button data-sm="av" class="${shopMode === 'av' ? 'on' : ''}">🙂 아바타 상점</button></div>` : '';
+    if (avOn && shopMode === 'av') return modes + avatarShop();
     const all = sortItems(Object.entries(S.store || {}).filter(([, it]) => it && it.on !== false));
     const cats = ['전체', ...c.cats.filter((k) => all.some(([, it]) => it.c === k)), ...[...new Set(all.map(([, it]) => it.c).filter((k) => k && !c.cats.includes(k)))]];
     if (!cats.includes(shopCat)) shopCat = '전체';
     const list = all.filter(([, it]) => shopCat === '전체' || it.c === shopCat);
-    return `<div class="panel"><div class="a-head" style="margin-bottom:10px"><h3 style="margin:0">🛒 상점</h3><span class="sp"></span><span class="muted">쓸 수 있는 돈</span><b>${E.won(a.cash || 0)}</b></div>
+    return `${modes}<div class="panel"><div class="a-head" style="margin-bottom:10px"><h3 style="margin:0">🛒 상점</h3><span class="sp"></span><span class="muted">쓸 수 있는 돈</span><b>${E.won(a.cash || 0)}</b></div>
       <div class="chips">${cats.map((k) => `<button data-cat="${esc(k)}" class="${k === shopCat ? 'on' : ''}">${esc(k)}</button>`).join('')}</div>
       ${list.length ? `<div class="shop-grid">${list.map(([iid, it]) => (it.g ? groupCard(iid, it) : itemCard(iid, it, a))).join('')}</div>` : '<p class="empty">지금은 살 수 있는 물건이 없어요.</p>'}</div>`;
+  }
+  // 아바타 상점: 모양마다 오늘의 얼굴 후보 (학생마다·날마다 다름)
+  function avatarShop() {
+    const c = E.cfg();
+    const a = me();
+    const styles = Object.entries(c.av.styles).filter(([, p]) => typeof p === 'number').sort((x, y) => x[1] - y[1]);
+    if (!avStyle || typeof c.av.styles[avStyle] !== 'number') avStyle = styles[0][0];
+    const cur = a.avatar || { style: 'thumbs', seed: S.uid, id: 'base' };
+    const owned = [['base', { style: 'thumbs', seed: S.uid }], ...Object.entries(a.avs || {})];
+    const isCur = (id, v) => (cur.id ? cur.id === id : cur.style === v.style && cur.seed === v.seed);
+    const today = E.kday(B.now());
+    const seeds = Array.from({ length: c.av.n || 12 }, (_, i) => `${S.uid.slice(-4)}-${today}-${i}`);
+    const mine = new Set(Object.values(a.avs || {}).map((v) => `${v.style}|${v.seed}`));
+    return `<div class="panel"><h3>🙂 내 아바타 <span class="muted">눌러서 바꿔요</span></h3>
+        <div class="av-grid">${owned.map(([id, v]) => `<button class="av-pick ${isCur(id, v) ? 'on' : ''}" data-aveq="${esc(id)}"><img src="${E.avatarUrl(v.style, v.seed)}" alt="" loading="lazy"><small>${id === 'base' ? '기본' : esc(E.STYLE_NAMES[v.style] || v.style)}</small></button>`).join('')}</div></div>
+      <div class="panel" style="margin-top:16px"><h3>🛍️ 아바타 상점 <span class="muted">날마다 새 얼굴이 나와요 · 쓸 수 있는 돈 ${E.won(a.cash || 0)}</span></h3>
+        <div class="chips">${styles.map(([s, p]) => `<button data-avs="${esc(s)}" class="${s === avStyle ? 'on' : ''}">${esc(E.STYLE_NAMES[s] || s)} · ${E.won(p)}</button>`).join('')}</div>
+        <div class="av-grid">${seeds.map((seed) => { const own = mine.has(`${avStyle}|${seed}`); return `<div class="av-buy"><img src="${E.avatarUrl(avStyle, seed)}" alt="" loading="lazy"><button class="btn xs ${own ? '' : 'primary'}" data-avbuy="${esc(seed)}" ${own ? 'disabled' : ''}>${own ? '가짐' : E.won(c.av.styles[avStyle])}</button></div>`; }).join('')}</div></div>`;
+  }
+  async function buyAvatar(seed) {
+    const c = E.cfg();
+    const price = c.av.styles[avStyle];
+    if ((me().cash || 0) < price) return toast('돈이 부족해요.', 'bad');
+    if (!(await confirmBox('아바타 사기', `<div style="text-align:center"><img src="${E.avatarUrl(avStyle, seed)}" alt="" style="width:120px;height:120px;border-radius:50%;background:#f4f1ff"></div><br>${esc(E.STYLE_NAMES[avStyle] || avStyle)} 아바타를 ${E.won(price)}에 살까요? 사면 바로 바뀌어요.`, '사기'))) return;
+    await E.ops.buyAvatar(avStyle, seed);
   }
   function itemCard(iid, it, a) {
     const have = (a.items && a.items[iid]) || 0;
@@ -366,6 +395,13 @@
   const VIEW = { wallet, shop, bank, stock, jobs };
 
   async function onClick(e) {
+    const av = e.target.closest('[data-sm],[data-avs],[data-avbuy],[data-aveq]');
+    if (av) {
+      if (av.dataset.sm) { shopMode = av.dataset.sm; A.render(); return; }
+      if (av.dataset.avs) { avStyle = av.dataset.avs; A.render(); return; }
+      if (av.dataset.avbuy) return buyAvatar(av.dataset.avbuy);
+      if (av.dataset.aveq) return E.ops.equipAvatar(av.dataset.aveq);
+    }
     const t = e.target.closest('[data-use],[data-buy],[data-grp],[data-cat],[data-more],[data-dep],[data-wd],[data-sbuy],[data-sell]');
     if (!t) return;
     if (t.dataset.cat !== undefined) { shopCat = t.dataset.cat; A.render(); return; }
