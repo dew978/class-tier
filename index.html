@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0c1120">
+  <title>클래스 티어</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 1.8 20.5 5v6.2c0 5.6-3.6 9.7-8.5 11.2C7.1 20.9 3.5 16.8 3.5 11.2V5z' fill='%23f2bf3c' stroke='%237a4a05'/%3E%3Cpath d='M12 6.4l1.6 3.3 3.6.5-2.6 2.5.6 3.6-3.2-1.7-3.2 1.7.6-3.6-2.6-2.5 3.6-.5z' fill='%23fff6cf'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/tier.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="g-bronze" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3b27e"/><stop offset=".55" stop-color="#b8672f"/><stop offset="1" stop-color="#6e3714"/></linearGradient>
+      <linearGradient id="g-silver" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".5" stop-color="#b9c3d1"/><stop offset="1" stop-color="#6b7688"/></linearGradient>
+      <linearGradient id="g-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2b0"/><stop offset=".5" stop-color="#f2bf3c"/><stop offset="1" stop-color="#a86b0c"/></linearGradient>
+      <linearGradient id="g-platinum" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d8fff9"/><stop offset=".5" stop-color="#3fd1c2"/><stop offset="1" stop-color="#127a73"/></linearGradient>
+      <linearGradient id="g-diamond" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e6f0ff"/><stop offset=".45" stop-color="#6ea2ff"/><stop offset="1" stop-color="#8f4dff"/></linearGradient>
+      <linearGradient id="g-champion" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3a6"/><stop offset=".5" stop-color="#ffc43d"/><stop offset="1" stop-color="#e2562e"/></linearGradient>
+      <linearGradient id="g-placement" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9aa6c4"/><stop offset="1" stop-color="#4a5572"/></linearGradient>
+    </defs>
+  </svg>
+
+  <section id="scr-loading" class="screen center">
+    <div class="loader"><div class="stone b"></div><div class="stone w"></div></div>
+    <p class="muted" id="loading-msg">불러오는 중…</p>
+  </section>
+
+  <section id="scr-login" class="screen center hidden">
+    <div class="auth-card">
+      <div class="logo-tier" id="login-logo"></div>
+      <h1 id="login-title">클래스 티어</h1>
+      <p class="muted">우리 반 생활 종합 티어 · 매달 새 시즌</p>
+      <form id="login-form" autocomplete="on">
+        <label>아이디<input id="login-id" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+        <label>비밀번호<input id="login-pw" type="password" autocomplete="current-password" required></label>
+        <button class="btn primary lg" type="submit">입장하기</button>
+        <p class="err" id="login-err"></p>
+      </form>
+      <div class="demo-note hidden" id="demo-note">
+        <b>데모 모드</b> — Firebase가 연결되지 않아 이 브라우저에만 저장됩니다.
+        <button class="btn ghost sm" id="demo-reset">데모 데이터 초기화</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="scr-setup" class="screen center hidden">
+    <div class="auth-card">
+      <div class="logo-tier" id="setup-logo"></div>
+      <h1>처음 설정</h1>
+      <p class="muted">선생님 계정을 만듭니다. 아이디는 <b>teacher</b> 입니다.</p>
+      <form id="setup-form">
+        <label>반 이름<input id="setup-class" required placeholder="예: 5학년 3반"></label>
+        <label>선생님 표시 이름<input id="setup-name" required placeholder="예: 김선생님"></label>
+        <label>비밀번호 (6자 이상)<input id="setup-pw" type="password" minlength="6" autocomplete="new-password" required></label>
+        <label>비밀번호 확인<input id="setup-pw2" type="password" minlength="6" autocomplete="new-password" required></label>
+        <button class="btn primary lg" type="submit">시작하기</button>
+        <p class="err" id="setup-err"></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- 학생 -->
+  <section id="scr-student" class="screen hidden">
+    <header class="topbar">
+      <div class="brand" id="st-brand"></div>
+      <div class="top-me" id="st-me"></div>
+      <button class="btn ghost sm" data-act="logout">로그아웃</button>
+    </header>
+    <nav class="subtabs" id="st-tabs">
+      <button data-tab="home" class="on">🏠 홈</button>
+      <button data-tab="rank">📊 순위</button>
+      <button data-tab="submit">✍️ 기록하기</button>
+      <button data-tab="mine">📋 내 점수</button>
+      <button data-tab="fame">🏆 명예의 전당</button>
+    </nav>
+    <main class="page" id="st-main"></main>
+  </section>
+
+  <!-- 선생님 -->
+  <section id="scr-teacher" class="screen hidden">
+    <header class="topbar">
+      <div class="brand" id="tc-brand"></div>
+      <nav class="tabs" id="tc-tabs">
+        <button data-tab="board" class="on">순위 현황</button>
+        <button data-tab="approve">승인 대기</button>
+        <button data-tab="acts">경쟁 활동</button>
+        <button data-tab="praise">칭찬·감점</button>
+        <button data-tab="students">학생 관리</button>
+        <button data-tab="close">월 마감·보상</button>
+        <button data-tab="settings">설정</button>
+      </nav>
+      <button class="btn ghost sm" data-act="logout">로그아웃</button>
+    </header>
+    <main class="page wide" id="tc-main"></main>
+  </section>
+
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <script src="js/firebase-config.js"></script>
+  <script src="js/tier.js"></script>
+  <script src="js/backend.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/teacher.js"></script>
+</body>
+</html>

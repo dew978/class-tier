@@ -1,0 +1,63 @@
+{
+  "rules": {
+    "config": {
+      "teacher": {
+        ".read": true,
+        ".write": "auth != null && !data.exists() && newData.val() === auth.uid"
+      },
+      "className": {
+        ".read": true,
+        ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+      },
+      "teacherName": {
+        ".read": "auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid)",
+        ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+      },
+      "settings": {
+        ".read": "auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid)",
+        ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+      }
+    },
+    "users": {
+      ".read": "auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid)",
+      "$uid": {
+        ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+      }
+    },
+    "secrets": {
+      ".read": "auth != null && root.child('config/teacher').val() === auth.uid",
+      ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+    },
+    "activities": {
+      ".read": "auth != null && root.child('config/teacher').val() === auth.uid",
+      ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+    },
+    "entries": {
+      ".read": "auth != null && root.child('config/teacher').val() === auth.uid",
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('config/teacher').val() === auth.uid)",
+        ".write": "auth != null && root.child('config/teacher').val() === auth.uid",
+        "$eid": {
+          ".write": "auth != null && auth.uid === $uid && root.child('users/' + auth.uid).exists() && ((!data.exists() && newData.child('by').val() === 'student' && newData.child('status').val() === 'pending' && !newData.child('points').exists() && !newData.child('reviewedAt').exists() && (newData.child('cat').val() === 'reading' || newData.child('cat').val() === 'homework' || newData.child('cat').val() === 'service') && newData.child('text').isString() && newData.child('text').val().length <= 200) || (data.exists() && data.child('status').val() === 'pending' && !newData.exists()))"
+        }
+      }
+    },
+    "standings": {
+      ".read": "auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid)",
+      ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+    },
+    "myDetail": {
+      ".read": "auth != null && root.child('config/teacher').val() === auth.uid",
+      ".write": "auth != null && root.child('config/teacher').val() === auth.uid",
+      "$month": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid"
+        }
+      }
+    },
+    "seasons": {
+      ".read": "auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid)",
+      ".write": "auth != null && root.child('config/teacher').val() === auth.uid"
+    }
+  }
+}

@@ -1,0 +1,179 @@
+/* 학급 생활 티어 — 점수 엔진
+   한 달 = 한 시즌. 매달 전원 1000점에서 시작해 그달의 사건(활동·기록)을 시간순으로 다시 계산합니다.
+   - 경쟁 항목(수행평가·대회): 다자간 상대평가. 모든 친구와 1:1로 비교해
+       Δ = K / (참가자수-1) × Σ(실제결과 − 기대승률)
+     기대승률 = 1 / (1 + 10^((상대점수 − 내점수)/400))  → 점수가 높은 친구보다 잘하면 더 많이 오름 (오목 상대 보정과 같은 원리)
+     반 전체 점수 합은 유지됩니다(반올림 오차 제외).
+   - 누적 항목(칭찬·독서·과제·1인1역·감점): 배점만큼 더하고 빼며, 항목별 월 한도를 넘으면 0점.
+   활동을 고치거나 지우면 그달 전체가 자동으로 다시 계산됩니다. */
+(function () {
+  const START = 1000;
+  const TIER_LIST = [
+    { id: 'bronze', name: '브론즈' },
+    { id: 'silver', name: '실버' },
+    { id: 'gold', name: '골드' },
+    { id: 'platinum', name: '플래티넘' },
+    { id: 'diamond', name: '다이아' },
+  ];
+  const KIND_NAMES = { perf: '수행평가', contest: '학급 대회·경쟁활동' };
+  const MODE_NAMES = { score: '점수 (높을수록 좋음)', rank: '순위 (1등이 가장 좋음)', grade: '등급 (잘함·보통·노력)' };
+  const GRADE_VALUES = { 잘함: 3, 보통: 2, 노력: 1 };
+  const K_PRESETS = { small: { name: '작게', k: 50 }, normal: { name: '보통', k: 80 }, large: { name: '크게', k: 110 } };
+
+  const DEFAULT_SETTINGS = {
+    thresholds: { silver: 900, gold: 1000, platinum: 1100, diamond: 1175 },
+    cats: {
+      praise: { name: '칭찬', points: 5, cap: 0, who: 'teacher' },
+      penalty: { name: '감점', points: -5, cap: 0, who: 'teacher' },
+      reading: { name: '독서 기록', points: 5, cap: 10, who: 'student' },
+      homework: { name: '과제·숙제 완료', points: 3, cap: 15, who: 'student' },
+      service: { name: '1인1역·봉사', points: 3, cap: 15, who: 'student' },
+    },
+    showScores: true,
+    rewards: { champion: '', diamond: '', platinum: '', gold: '', silver: '', bronze: '' },
+  };
+  const STUDENT_CATS = ['reading', 'homework', 'service'];
+
+  function mergeSettings(raw) {
+    const s = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+    if (!raw) return s;
+    if (raw.thresholds) Object.assign(s.thresholds, raw.thresholds);
+    if (raw.cats) for (const k of Object.keys(s.cats)) if (raw.cats[k]) Object.assign(s.cats[k], raw.cats[k]);
+    if (raw.rewards) Object.assign(s.rewards, raw.rewards);
+    if (typeof raw.showScores === 'boolean') s.showScores = raw.showScores;
+    return s;
+  }
+
+  // 월 키 (한국 시간 기준 로컬 날짜)
+  function monthKey(ts) {
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+  function monthLabel(key) {
+    const [y, m] = String(key).split('-');
+    return `${y}년 ${Number(m)}월`;
+  }
+  function prevMonth(key) {
+    const [y, m] = key.split('-').map(Number);
+    return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+  }
+
+  function tierOf(score, th) {
+    th = th || DEFAULT_SETTINGS.thresholds;
+    if (score >= th.diamond) return TIER_LIST[4];
+    if (score >= th.platinum) return TIER_LIST[3];
+    if (score >= th.gold) return TIER_LIST[2];
+    if (score >= th.silver) return TIER_LIST[1];
+    return TIER_LIST[0];
+  }
+
+  // 활동 결과값 → 비교용 숫자 (클수록 잘함). 값이 없으면 null(불참)
+  function valueOf(mode, raw) {
+    if (raw === undefined || raw === null || raw === '') return null;
+    if (mode === 'grade') return GRADE_VALUES[raw] ?? null;
+    const n = Number(raw);
+    if (!isFinite(n)) return null;
+    return mode === 'rank' ? -n : n;
+  }
+
+  // 다자간 상대평가 점수 변동
+  function eloDeltas(parts, ratings, K) {
+    const n = parts.length;
+    const out = {};
+    if (n < 2) { parts.forEach((p) => (out[p.uid] = 0)); return out; }
+    for (const a of parts) {
+      let sum = 0;
+      for (const b of parts) {
+        if (a === b) continue;
+        const s = a.v > b.v ? 1 : a.v < b.v ? 0 : 0.5;
+        const e = 1 / (1 + Math.pow(10, (ratings[b.uid] - ratings[a.uid]) / 400));
+        sum += s - e;
+      }
+      out[a.uid] = Math.round((K / (n - 1)) * sum);
+    }
+    return out;
+  }
+
+  /* 한 달 계산
+     users: {uid: {name}}   activities: {aid: activity}   entries: {uid: {eid: entry}}
+     반환: { scores, rows: {uid:{score, rank, tier}}, champion, detail: {uid: {...}} } */
+  function compute(month, users, activities, entries, settingsRaw) {
+    const st = mergeSettings(settingsRaw);
+    const uids = Object.keys(users || {});
+    const R = {};
+    const detail = {};
+    const counts = {};
+    for (const u of uids) {
+      R[u] = START;
+      detail[u] = { acts: [], cats: {}, logs: [], comp: 0, accum: 0 };
+      counts[u] = {};
+    }
+    const ev = [];
+    for (const [id, a] of Object.entries(activities || {})) {
+      if (a && a.month === month) ev.push({ t: a.at || 0, id, type: 'act', a });
+    }
+    for (const [uid, list] of Object.entries(entries || {})) {
+      if (!R.hasOwnProperty(uid)) continue;
+      for (const [id, e] of Object.entries(list || {})) {
+        if (e && e.month === month && e.status === 'approved') ev.push({ t: e.ts || 0, id, type: 'entry', uid, e });
+      }
+    }
+    ev.sort((x, y) => x.t - y.t || (x.id < y.id ? -1 : 1));
+
+    for (const x of ev) {
+      if (x.type === 'act') {
+        const a = x.a;
+        const parts = [];
+        for (const [uid, raw] of Object.entries(a.results || {})) {
+          if (!R.hasOwnProperty(uid)) continue;
+          const v = valueOf(a.mode, raw);
+          if (v !== null) parts.push({ uid, v, raw });
+        }
+        const K = (K_PRESETS[a.weight] || K_PRESETS.normal).k;
+        const d = eloDeltas(parts, R, K);
+        // 반 안 등수 (동점은 같은 등수)
+        const sorted = parts.slice().sort((p, q) => q.v - p.v);
+        const place = {};
+        sorted.forEach((p, i) => { place[p.uid] = i > 0 && sorted[i - 1].v === p.v ? place[sorted[i - 1].uid] : i + 1; });
+        for (const p of parts) {
+          R[p.uid] += d[p.uid];
+          detail[p.uid].comp += d[p.uid];
+          detail[p.uid].acts.push({ id: x.id, name: a.name, kind: a.kind, mode: a.mode, raw: p.raw, place: place[p.uid], n: parts.length, delta: d[p.uid], at: a.at });
+        }
+      } else {
+        const e = x.e, uid = x.uid;
+        const cat = st.cats[e.cat];
+        if (!cat) continue;
+        const cnt = (counts[uid][e.cat] || 0) + 1;
+        counts[uid][e.cat] = cnt;
+        // 점수 직접 지정은 선생님 기록(칭찬·감점)만 인정 — 학생 제출은 항상 설정된 배점
+        const custom = e.by === 'teacher' && e.points !== undefined && e.points !== null && e.points !== '';
+        let pts = custom ? Number(e.points) : cat.points;
+        let capped = false;
+        if (cat.cap > 0 && cnt > cat.cap) { pts = 0; capped = true; }
+        R[uid] += pts;
+        detail[uid].accum += pts;
+        const c = (detail[uid].cats[e.cat] = detail[uid].cats[e.cat] || { count: 0, points: 0, capped: 0 });
+        c.count++; c.points += pts; if (capped) c.capped++;
+        detail[uid].logs.push({ id: x.id, cat: e.cat, text: e.text || '', points: pts, capped, at: e.ts });
+      }
+    }
+
+    // 순위: 점수 → 경쟁 항목 점수 → 이름
+    const order = uids.slice().sort((a, b) => R[b] - R[a] || detail[b].comp - detail[a].comp || String(users[a].name).localeCompare(users[b].name));
+    const rows = {};
+    order.forEach((u, i) => {
+      const prev = order[i - 1];
+      const rank = i > 0 && R[prev] === R[u] ? rows[prev].rank : i + 1;
+      rows[u] = { score: R[u], rank, tier: tierOf(R[u], st.thresholds).id };
+    });
+    const champion = order.length && ev.length ? order[0] : null;
+    if (champion) rows[champion].champion = true;
+    return { scores: R, rows, champion, detail, order };
+  }
+
+  window.Tier = {
+    START, TIER_LIST, KIND_NAMES, MODE_NAMES, GRADE_VALUES, K_PRESETS, DEFAULT_SETTINGS, STUDENT_CATS,
+    mergeSettings, monthKey, monthLabel, prevMonth, tierOf, valueOf, eloDeltas, compute,
+  };
+})();
