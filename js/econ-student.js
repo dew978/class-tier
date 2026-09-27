@@ -25,7 +25,7 @@
   const myJobs = () => Object.entries(S.jobs || {}).filter(([, j]) => j && j.on !== false && j.mem && j.mem[S.uid]);
   function wageBonus() {
     const lv = S.myLevels || {};
-    return window.Tracks.wageBonus('typing', lv.typing || 0) + window.Tracks.wageBonus('recorder', lv.recorder || 0);
+    return window.Tracks.wageBonusAll(lv);
   }
   const sortItems = (list) => list.sort((a, b) => (a[1].ord ?? 999) - (b[1].ord ?? 999) || String(a[1].n).localeCompare(String(b[1].n)));
 

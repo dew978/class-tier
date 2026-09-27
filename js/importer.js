@@ -20,13 +20,11 @@
 
   TC.addTab('import', '수페에서 가져오기', () => {
     main().innerHTML = `<div class="a-head"><h2>수페에서 가져오기</h2><span class="muted">soopeh.com에서 쓰던 학급 경제를 그대로 옮겨요</span></div>
-      <div class="panel"><h3>1. 파일 고르기</h3>
-        <p class="note" style="margin-top:0">이 컴퓨터의 <b>문서\\class-tier-migration\\soopeh-export.json</b> 파일을 고르세요. 파일은 이 브라우저에서만 읽고, 학생 개인 정보는 GitHub 등 인터넷에 올라가지 않아요.</p>
+      <div class="panel drop-zone" id="im-drop"><h3>1. 파일 고르기</h3>
+        <p class="note" style="margin-top:0">이 컴퓨터의 <b>「다운로드」 폴더에 있는 soopeh-export.json</b>을 고르거나, 파일을 이 칸에 끌어다 놓으세요. 파일은 이 브라우저에서만 읽고, 학생 개인 정보는 GitHub 등 인터넷에 올라가지 않아요.</p>
         <input type="file" id="im-file" accept=".json,application/json"><span class="muted" id="im-fname"></span></div>
       <div id="im-body"></div>`;
-    $('#im-file').onchange = async (e) => {
-      const f = e.target.files[0];
-      if (!f) return;
+    const loadFile = async (f) => {
       try {
         const j = JSON.parse(await f.text());
         if (j.source !== 'soopeh' || !Array.isArray(j.students)) throw new Error('수페에서 내보낸 파일이 아니에요.');
@@ -36,6 +34,11 @@
         A.render();
       } catch (err) { toast(err.message || '파일을 읽지 못했어요.', 'bad'); }
     };
+    $('#im-file').onchange = (e) => { if (e.target.files[0]) loadFile(e.target.files[0]); };
+    const dz = $('#im-drop');
+    dz.ondragover = (e) => { e.preventDefault(); dz.classList.add('over'); };
+    dz.ondragleave = () => dz.classList.remove('over');
+    dz.ondrop = (e) => { e.preventDefault(); dz.classList.remove('over'); const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) loadFile(f); };
     main().onchange = (e) => {
       const s = e.target.closest('[data-map]');
       if (s) { if (s.value) map[s.dataset.map] = s.value; else delete map[s.dataset.map]; $('#im-body').dataset.k = ''; A.render(); }

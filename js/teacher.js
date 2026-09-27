@@ -630,24 +630,26 @@
     main().innerHTML = `<div class="a-head"><h2>급수·한자</h2><span class="sp"></span>
       <span class="muted" style="font-size:.88em">급수 칸을 바꾸면 점수 없이 급수만 바뀌어요(처음 설정용). 「승급」은 한 단계 올리고 점수도 줘요.</span></div>
       <div class="tbl-wrap" id="lv-table"></div>
-      <div class="grid2" style="margin-top:16px"><div class="panel" id="lv-ref-typing"></div><div class="panel" id="lv-ref-recorder"></div></div>`;
-    const TR = window.Tracks.TRACKS;
-    for (const tk of ['typing', 'recorder']) {
-      $('#lv-ref-' + tk).innerHTML = `<h3>${TR[tk].ic} ${TR[tk].name} 급수표</h3><table class="tbl"><tbody>${TR[tk].levels.map((l, i) => `<tr><td><b>${i + 1}. ${esc(l.name)}</b></td><td>${l.songs ? `${esc(l.songs)}<br>` : ''}<span class="muted">${esc(l.cond)}</span></td><td class="muted">${esc(l.reward)}</td></tr>`).join('')}</tbody></table>`;
-    }
+      <div class="a-head" style="margin:22px 0 10px"><h2 style="font-size:1.15em">📋 급수표</h2><span class="muted" style="font-size:.88em">기준·보상·상금·주급 추가를 고치고, 단계와 급수표를 더하거나 뺄 수 있어요</span><span class="sp"></span>
+        <button class="btn primary sm" data-tr="new">+ 새 급수표</button></div>
+      <div class="track-cards" id="lv-refs"></div>`;
     main().onchange = async (e) => {
       const s = e.target.closest('[data-lvset]');
       if (!s) return;
       const [u, tk] = s.dataset.lvset.split('|');
       await B.set(`levels/${u}/${tk}`, Number(s.value));
-      toast(`${nameOf(u)} ${TR[tk].name} 급수를 ${window.Tracks.levelName(tk, Number(s.value))}(으)로 맞췄어요.`, 'good');
+      toast(`${nameOf(u)} ${window.Tracks.TRACKS[tk].name} 급수를 ${window.Tracks.levelName(tk, Number(s.value))}(으)로 맞췄어요.`, 'good');
     };
     main().onclick = async (e) => {
+      const tr = e.target.closest('[data-tr]');
+      if (tr) return editTrack(tr.dataset.tr === 'new' ? null : tr.dataset.tr);
       const up = e.target.closest('[data-up]');
       if (up) {
+        const TR = window.Tracks.TRACKS;
         const [u, tk] = up.dataset.up.split('|');
         const cur = (levels[u] && levels[u][tk]) || 0;
         const t = TR[tk];
+        if (!t) return;
         if (cur >= t.levels.length) return;
         const m = A.curMonth();
         if (isClosed(m)) return toast('이번 달은 마감되었어요.', 'bad');
@@ -666,27 +668,147 @@
   };
   RD.levels = () => {
     const TR = window.Tracks.TRACKS;
+    const tids = window.Tracks.ids();
+    const st = A.settings();
     const H = window.Hanja;
     const m = A.curMonth();
     const ids = Object.keys(S.users).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
     const today = todayStr(B.now());
     const sel = (u, tk) => {
       const cur = (levels[u] && levels[u][tk]) || 0;
-      return `<div class="row-flex" style="gap:6px;flex-wrap:nowrap"><select data-lvset="${u}|${tk}" style="width:auto">${['시작 전', ...TR[tk].levels.map((l) => l.name)].map((n, i) => `<option value="${i}" ${i === cur ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
-        ${cur < TR[tk].levels.length ? `<button class="btn xs good" data-up="${u}|${tk}">승급</button>` : ''}</div>`;
+      return `<div class="row-flex" style="gap:6px;flex-wrap:nowrap"><select data-lvset="${u}|${esc(tk)}" style="width:auto">${['시작 전', ...TR[tk].levels.map((l) => l.name)].map((n, i) => `<option value="${i}" ${i === cur ? 'selected' : ''}>${esc(n)}</option>`).join('')}${cur > TR[tk].levels.length ? `<option selected>${cur}단계</option>` : ''}</select>
+        ${cur < TR[tk].levels.length ? `<button class="btn xs good" data-up="${u}|${esc(tk)}">승급</button>` : ''}</div>`;
     };
-    $('#lv-table').innerHTML = ids.length ? `<table class="tbl"><thead><tr><th>학생</th><th>⌨️ 타자</th><th>🎵 리코더</th><th>🀄 한자 급수</th><th class="num">배운 한자</th><th>오늘</th><th class="num">이번 달 학습</th><th>최근 시험</th><th></th></tr></thead><tbody>
+    const tableHtml = ids.length ? `<table class="tbl"><thead><tr><th>학생</th>${tids.map((tk) => `<th>${esc(TR[tk].ic)} ${esc(TR[tk].name)}</th>`).join('')}<th>🀄 한자 급수</th><th class="num">배운 한자</th><th>오늘</th><th class="num">이번 달 학습</th><th>최근 시험</th><th></th></tr></thead><tbody>
       ${ids.map((u) => {
         const h = Object.assign({ learned: 0, level: 0 }, hanjaAll[u] || {});
         const daily = Object.entries(ents[u] || {}).filter(([k, e]) => e.cat === 'hanjaDaily' && e.month === m).length;
         const lt = h.lastTest;
-        return `<tr><td>${nameTag(u)}</td><td>${sel(u, 'typing')}</td><td>${sel(u, 'recorder')}</td>
+        return `<tr><td>${nameTag(u)}</td>${tids.map((tk) => `<td>${sel(u, tk)}</td>`).join('')}
           <td><b>${esc(window.Tracks.levelName('hanja', h.level))}</b></td><td class="num">${h.learned} / ${H.LIST.length}</td>
           <td>${h.lastDone === today ? '✅' : '-'}</td><td class="num">${daily}회</td>
           <td>${lt ? `${fmtDate(lt.ts)} ${esc(H.LEVELS[lt.level] || '')} ${lt.right}/${lt.total} ${lt.passed ? '<span class="pill good">통과</span>' : '<span class="pill warn">재도전</span>'}` : '-'}</td>
           <td><button class="btn xs" data-hj="${u}">한자 조정</button></td></tr>`;
       }).join('')}</tbody></table>` : '<p class="empty" style="padding:30px">학생이 없어요</p>';
+    // 선택 상자를 바꾸는 중에는 다시 그리지 않음
+    const tb = $('#lv-table');
+    if (!(document.activeElement && tb.contains(document.activeElement)) && tb._h !== tableHtml) { tb._h = tableHtml; tb.innerHTML = tableHtml; }
+    const won = (n) => (window.Econ ? window.Econ.won(n) : `${n}`);
+    const refs = tids.map((tk) => {
+      const t = TR[tk];
+      const c = st.cats[t.cat] || { points: 10, cap: 1 };
+      return `<div class="panel track-card"><div class="a-head" style="margin:0 0 8px"><h3 style="margin:0">${esc(t.ic)} ${esc(t.name)} 급수표</h3><span class="muted" style="font-size:.85em">승급 ${signed(c.points)}점 · 한 달 ${c.cap ? `${c.cap}번까지` : '제한 없음'}</span><span class="sp"></span>
+          <button class="btn xs primary" data-tr="${esc(tk)}">✏️ 고치기</button></div>
+        ${t.levels.length ? `<table class="tbl"><thead><tr><th>단계</th><th>기준</th><th>보상</th><th class="num">상금</th><th class="num">주급 추가</th></tr></thead><tbody>${t.levels.map((l, i) => `<tr><td class="nowrap"><b>${i + 1}. ${esc(l.name)}</b></td><td>${l.songs ? `${esc(l.songs)}<br>` : ''}<span class="muted">${esc(l.cond)}</span></td><td class="muted">${esc(l.reward)}</td>
+          <td class="num">${l.prize ? won(l.prize) : '-'}</td><td class="num">${l.wage ? won(l.wage) : '-'}</td></tr>`).join('')}</tbody></table>` : '<p class="empty">단계가 없어요. 「고치기」에서 더해 주세요.</p>'}</div>`;
+    }).join('') || '<p class="empty">급수표가 없어요. 「+ 새 급수표」로 만들어요.</p>';
+    const rf = $('#lv-refs');
+    if (rf._h !== refs) { rf._h = refs; rf.innerHTML = refs; }
   };
+  /* 급수표 고치기: 단계(이름·곡/과제·기준·보상·상금·주급 추가) 더하기·빼기·순서 바꾸기, 급수표 이름·아이콘·승급 점수·한 달 횟수
+     단계를 빼거나 끼워 넣으면 학생들의 급수를 「같은 이름의 단계」에 맞춰 옮김 */
+  function editTrack(tid) {
+    const TRK = window.Tracks;
+    const cur = tid ? TRK.editable()[tid] : null;
+    const st = A.settings();
+    const cat = tid ? TRK.catOf(tid) : null;
+    const cv = (cat && st.cats[cat]) || { points: 10, cap: 1 };
+    let nk = 0;
+    let rows = cur ? cur.levels.map((l, i) => Object.assign({ k: i + 1 }, l)) : [{ k: 'n0', name: '', songs: '', cond: '', reward: '', prize: 0, wage: 0 }];
+    const blank = () => ({ k: `n${++nk}`, name: '', songs: '', cond: '', reward: '', prize: 0, wage: 0 });
+    const m = modal(`<h3>${cur ? `${esc(cur.ic)} ${esc(cur.name)} 급수표 고치기` : '새 급수표'}</h3>
+      <div class="form-grid"><label>이름<input id="te-name" maxlength="20" value="${esc(cur ? cur.name : '')}" placeholder="예: 줄넘기"></label>
+        <label>아이콘 (이모지)<input id="te-ic" maxlength="4" value="${esc(cur ? cur.ic : '🏅')}"></label>
+        <label>승급 점수 (티어)<input id="te-pts" type="number" value="${cv.points}"></label>
+        <label>한 달 최대 승급 인정 (회) <small>0 = 제한 없음</small><input id="te-cap" type="number" min="0" value="${cv.cap}"></label></div>
+      <div class="tbl-wrap te-wrap"><table class="tbl te-tbl"><thead><tr><th>#</th><th>단계 이름</th><th>곡·과제 (선택)</th><th>통과 기준</th><th>보상 (학생에게 보이는 글)</th><th>상금 (원)</th><th>주급 추가 (원)</th><th></th></tr></thead><tbody id="te-rows"></tbody></table></div>
+      <div class="row-flex" style="margin-top:8px"><button class="btn sm" data-te="add">+ 단계 더하기</button><span class="muted" style="font-size:.85em">상금은 승급을 승인할 때 보낼지 물어보고, 주급 추가는 급여를 줄 때 급수 수당으로 더해져요.</span></div>
+      <div class="foot">${cur ? '<button class="btn danger" data-te="del" style="margin-right:auto">급수표 삭제</button>' : ''}<button class="btn ghost" data-close>취소</button><button class="btn primary" data-te="save">저장</button></div>`, { wide: true, dismissable: false });
+    const el = (s) => m.el.querySelector(s);
+    const draw = () => {
+      el('#te-rows').innerHTML = rows.map((r, i) => `<tr><td class="num">${i + 1}</td>
+        <td><input data-f="name" data-i="${i}" value="${esc(r.name)}" maxlength="20" placeholder="예: 초보"></td>
+        <td><input data-f="songs" data-i="${i}" value="${esc(r.songs || '')}" maxlength="120"></td>
+        <td><input data-f="cond" data-i="${i}" value="${esc(r.cond || '')}" maxlength="120" placeholder="예: 1분에 100번"></td>
+        <td><input data-f="reward" data-i="${i}" value="${esc(r.reward || '')}" maxlength="60" placeholder="예: 마이쮸 1"></td>
+        <td><input data-f="prize" data-i="${i}" type="number" min="0" step="10000" value="${r.prize || ''}" placeholder="0" class="num-in"></td>
+        <td><input data-f="wage" data-i="${i}" type="number" min="0" step="10000" value="${r.wage || ''}" placeholder="0" class="num-in"></td>
+        <td class="nowrap"><button class="btn xs ghost" data-te="up" data-i="${i}" ${i ? '' : 'disabled'} title="위로">↑</button><button class="btn xs ghost" data-te="down" data-i="${i}" ${i < rows.length - 1 ? '' : 'disabled'} title="아래로">↓</button>
+          <button class="btn xs ghost" data-te="ins" data-i="${i}" title="아래에 끼워 넣기">＋</button><button class="btn xs ghost danger-txt" data-te="rm" data-i="${i}" title="빼기">✕</button></td></tr>`).join('');
+    };
+    draw();
+    el('#te-rows').oninput = (e) => {
+      const i = e.target.dataset.i, f = e.target.dataset.f;
+      if (i === undefined || !f) return;
+      rows[Number(i)][f] = f === 'prize' || f === 'wage' ? Math.max(0, Math.round(Number(e.target.value) || 0)) : e.target.value;
+    };
+    m.el.onclick = async (e) => {
+      const b = e.target.closest('[data-te]');
+      if (!b) return;
+      const i = Number(b.dataset.i);
+      const act = b.dataset.te;
+      if (act === 'add') { rows.push(blank()); draw(); return; }
+      if (act === 'ins') { rows.splice(i + 1, 0, blank()); draw(); return; }
+      if (act === 'rm') { rows.splice(i, 1); draw(); return; }
+      if (act === 'up' && i > 0) { [rows[i - 1], rows[i]] = [rows[i], rows[i - 1]]; draw(); return; }
+      if (act === 'down' && i < rows.length - 1) { [rows[i + 1], rows[i]] = [rows[i], rows[i + 1]]; draw(); return; }
+      if (act === 'del') {
+        const n = Object.keys(S.users).filter((u) => levels[u] && levels[u][tid] > 0).length;
+        if (!(await confirmBox('급수표 삭제', `「${esc(cur.name)}」 급수표를 지울까요?${n ? `<br>학생 ${n}명의 이 급수 기록도 함께 지워져요.` : ''}<br>이미 받은 승급 점수는 그대로 남아요.`, '삭제', true))) return;
+        const raw = trackRaw();
+        delete raw.tracks[tid];
+        const upd = { 'config/settings': raw };
+        for (const u of Object.keys(S.users)) if (levels[u] && levels[u][tid] !== undefined) upd[`levels/${u}/${tid}`] = null;
+        await B.update('', upd);
+        m.close();
+        toast('급수표를 지웠어요.');
+        return;
+      }
+      if (act === 'save') {
+        const name = el('#te-name').value.trim();
+        if (!name) return toast('급수표 이름을 적어 주세요.', 'bad');
+        const clean = rows.map((r) => Object.assign({}, r, { name: String(r.name || '').trim() })).filter((r) => r.name);
+        if (clean.length !== rows.length) return toast('이름이 빈 단계가 있어요. 이름을 적거나 ✕로 빼 주세요.', 'bad');
+        const pts = Number(el('#te-pts').value), cap = Math.max(0, Math.floor(Number(el('#te-cap').value) || 0));
+        if (!isFinite(pts)) return toast('승급 점수를 확인하세요.', 'bad');
+        const key = tid || `t${Date.now().toString(36).slice(-6)}`;
+        const raw = trackRaw();
+        raw.tracks[key] = {
+          name, ic: el('#te-ic').value.trim() || '🏅', ord: cur ? cur.ord : 10 + Object.keys(raw.tracks).length,
+          levels: clean.map((r) => { const o = { name: r.name }; for (const f of ['songs', 'cond', 'reward']) if (String(r[f] || '').trim()) o[f] = String(r[f]).trim(); if (r.prize > 0) o.prize = r.prize; if (r.wage > 0) o.wage = r.wage; return o; }),
+        };
+        raw.cats = raw.cats || {};
+        raw.cats[TRK.catOf(key)] = { name: `${name} 승급`, points: pts, cap };
+        const upd = { 'config/settings': raw };
+        // 학생 급수 옮기기: 학생이 달성한 가장 높은 (남아 있는) 단계가 새 표에서 몇 번째인지
+        let moved = 0;
+        if (tid) {
+          for (const u of Object.keys(S.users)) {
+            const L = (levels[u] && levels[u][tid]) || 0;
+            if (!L) continue;
+            let pos = 0;
+            clean.forEach((r, i) => { if (typeof r.k === 'number' && r.k <= L) pos = Math.max(pos, i + 1); });
+            if (pos !== L) { upd[`levels/${u}/${tid}`] = pos; moved++; }
+          }
+          if (moved && !(await confirmBox('학생 급수 맞추기', `단계가 바뀌어 학생 ${moved}명의 급수를 같은 이름의 단계로 옮길게요. 저장할까요?`, '저장'))) return;
+        }
+        await B.update('', upd);
+        m.close();
+        toast(`${name} 급수표를 저장했어요.${moved ? ` (학생 ${moved}명 급수 맞춤)` : ''}`, 'good');
+      }
+    };
+    // 설정에 저장할 급수표 원본 (처음 고칠 때는 기본 급수표를 옮겨 담음)
+    function trackRaw() {
+      const raw = JSON.parse(JSON.stringify(S.settingsRaw || {}));
+      if (!raw.tracksSet) {
+        raw.tracks = {};
+        for (const [k, t] of Object.entries(TRK.DEFAULTS)) raw.tracks[k] = JSON.parse(JSON.stringify(t));
+      }
+      raw.tracks = raw.tracks || {};
+      raw.tracksSet = true;
+      return raw;
+    }
+  }
   function editHanja(u) {
     const H = window.Hanja;
     const h = Object.assign({ learned: 0, level: 0 }, hanjaAll[u] || {});
@@ -898,7 +1020,7 @@
       <div class="two-col"><div class="col" style="gap:16px">
         <div class="panel"><h3>생활 점수 항목</h3><p class="note" style="margin-top:0">월 한도 0 = 무제한. 한도를 넘은 기록은 0점으로 반영돼요.</p>
           <table class="tbl"><thead><tr><th>항목</th><th>입력</th><th>1건 점수</th><th>월 한도(회)</th></tr></thead><tbody>
-          ${Object.entries(st.cats).map(([k, c]) => `<tr><td><input data-cn="${k}" value="${esc(c.name)}"></td><td>${k === 'service' && st.svMode === 'student' ? '학생 체크→확인' : { teacher: '선생님', student: '학생→승인', system: '자동(앱 채점)' }[c.who] || ''}</td>
+          ${Object.entries(st.cats).filter(([, c]) => !c.gone).map(([k, c]) => `<tr><td><input data-cn="${k}" value="${esc(c.name)}"></td><td>${k === 'service' && st.svMode === 'student' ? '학생 체크→확인' : { teacher: '선생님', student: '학생→승인', system: '자동(앱 채점)' }[c.who] || ''}</td>
             <td><input data-cp="${k}" type="number" value="${c.points}" style="width:90px"></td><td><input data-cc="${k}" type="number" min="0" value="${c.cap}" style="width:90px"></td></tr>`).join('')}
           </tbody></table></div>
         <div class="panel"><h3>🀄 한자 학습</h3><p class="note" style="margin-top:0">가정 학습은 인정하지 않아요 — 아래 요일·시간에만 학습과 승급 시험이 열려요.</p>
@@ -934,8 +1056,11 @@
     showRate();
     $('#st-save').onclick = async () => {
       const raw = JSON.parse(JSON.stringify(S.settingsRaw || {}));
+      const oldCats = raw.cats || {};
       raw.cats = {}; raw.thresholds = {};
       for (const k of Object.keys(st.cats)) {
+        // 지운 급수표의 승급 점수는 화면에 없지만 지난 기록 계산을 위해 그대로 둠
+        if (!$(`[data-cp="${k}"]`)) { if (oldCats[k]) raw.cats[k] = oldCats[k]; continue; }
         const pts = Number($(`[data-cp="${k}"]`).value), cap = Number($(`[data-cc="${k}"]`).value);
         if (!isFinite(pts) || !isFinite(cap) || cap < 0) return toast('점수·한도를 확인하세요.', 'bad');
         raw.cats[k] = { name: $(`[data-cn="${k}"]`).value.trim() || st.cats[k].name, points: k === 'penalty' ? -Math.abs(pts) : pts, cap: Math.floor(cap) };

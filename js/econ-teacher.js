@@ -481,7 +481,7 @@
       const js = Object.values(S.jobs || {}).filter((j) => j && j.on !== false && j.mem && j.mem[u]);
       const base = js.reduce((n, j) => n + (j.w || 0), 0);
       const L = lv(u);
-      const bonus = window.Tracks.wageBonus('typing', L.typing || 0) + window.Tracks.wageBonus('recorder', L.recorder || 0);
+      const bonus = window.Tracks.wageBonusAll(L);
       const extra = payExtra[u] || 0;
       const g = Math.max(0, base + bonus + extra);
       const x = E.taxOf(g, c.tax);

@@ -338,7 +338,7 @@
     }
     const fn = { home: stHome, rank: stRank, submit: stSubmit, mine: stMine, fame: stFame }[S.tab];
     // 입력 중인 폼은 다시 그리지 않음 (선택지가 바뀐 경우에만 다시 그림)
-    const formKey = JSON.stringify([S.pick, Object.keys(S.openUnits || {}), S.myLevels, Object.values(S.myEntries).filter((e) => e.status !== 'rejected').map((e) => [e.cat, e.aid || '', e.status, e.ts])]);
+    const formKey = JSON.stringify([S.pick, Object.keys(S.openUnits || {}), S.myLevels, S.settingsRaw && S.settingsRaw.tracks, S.settingsRaw && S.settingsRaw.cats, Object.values(S.myEntries).filter((e) => e.status !== 'rejected').map((e) => [e.cat, e.aid || '', e.status, e.ts])]);
     if (S.tab === 'submit' && main.dataset.tab === 'submit' && main.dataset.key === formKey) { stSubmitList(); return; }
     main.dataset.key = S.tab === 'submit' ? formKey : '';
     main.dataset.tab = S.tab;
@@ -397,10 +397,10 @@
         <div class="stat"><div class="k">승인 대기 중인 기록</div><div class="v">${Object.values(S.myEntries).filter((e) => e.status === 'pending').length}건</div></div>
       </div>
       <div class="panel" style="margin-top:16px"><h3>🎖️ 나의 급수</h3><div class="grid3">
-        ${['typing', 'recorder', 'hanja'].map((tk) => {
+        ${[...window.Tracks.ids(), 'hanja'].map((tk) => {
           const t = window.Tracks.TRACKS[tk];
           const cur = myLevel(tk);
-          return `<div class="stat"><div class="k">${t.ic} ${t.name}</div><div class="v" style="font-size:1.3em">${esc(window.Tracks.levelName(tk, cur))}</div>
+          return `<div class="stat"><div class="k">${esc(t.ic)} ${esc(t.name)}</div><div class="v" style="font-size:1.3em">${esc(window.Tracks.levelName(tk, cur))}</div>
             <div class="muted" style="font-size:.8em;margin-top:4px">${cur < t.levels.length ? `다음: ${esc(t.levels[cur].name)}` : '최고 급수!'}</div></div>`;
         }).join('')}</div></div>
       <div class="panel" style="margin-top:16px"><h3>📘 티어는 이렇게 정해져요</h3>
@@ -411,7 +411,7 @@
           · <b>등급 평가</b>는 ${T.GRADES.map((g) => `${g} ${st.gradePct[g] > 0 ? '+' : ''}${st.gradePct[g]}%`).join(' · ')} (활동의 기준 점수 기준)<br>
           · <b>단원평가</b>는 「기록하기」에서 내 점수를 입력하면 선생님이 확인해요.<br>
           · <b>칭찬, 독후감, 과제, 1인1역·봉사, 한자 매일 학습</b>은 할수록 점수가 쌓여요.<br>
-          · <b>타자·리코더·한자 급수</b>가 오르면 +${st.cats.lvTyping.points}점 (한 달에 종목별 1번까지)<br>
+          · <b>${[...window.Tracks.ids(), 'hanja'].map((tk) => esc(window.Tracks.TRACKS[tk].name)).join('·')} 급수</b>가 오르면 점수를 받아요 (한 달에 종목별 1번까지)<br>
           · 티어: 브론즈 ~${th.silver - 1} · 실버 ${th.silver}~ · 골드 ${th.gold}~ · 플래티넘 ${th.platinum}~ · 다이아 ${th.diamond}~ · <b>챔피언 = 그달 1위</b><br>
           · 이름 앞 엠블럼은 <b>지난달 확정 티어</b>예요.
         </div></div>`;
@@ -437,8 +437,9 @@
     { k: 'unit', ic: '📝', t: '단원평가', d: '내 점수 입력 → 선생님 확인' },
     { k: 'reading', ic: '📚', t: '독후감', d: '이번 주 통과 O / X' },
     { k: 'homework', ic: '✅', t: '과제·숙제', d: '완료한 과제 기록' },
-    { k: 'levelup', ic: '⬆️', t: '승급 심사', d: '타자·리코더 다음 급수' },
+    { k: 'levelup', ic: '⬆️', t: '승급 심사', d: '급수표 다음 급수' },
   ];
+  const catIcon = (cat) => CAT_IC[cat] || (String(cat).startsWith('lv_') && window.Tracks.editable()[cat.slice(3)] ? window.Tracks.editable()[cat.slice(3)].ic : '') || (String(cat).startsWith('lv') ? '⬆️' : '');
   function approvedCount(cat, month) {
     return Object.values(S.myEntries).filter((e) => e.cat === cat && e.month === month && e.status === 'approved' && e.ox !== 'X').length;
   }
@@ -475,16 +476,18 @@
         <div class="foot"><button class="btn primary lg" type="submit">과제 완료 제출</button></div></form>`;
     } else {
       const TR = window.Tracks.TRACKS;
-      form = ['typing', 'recorder'].map((tk) => {
+      const tids = window.Tracks.ids();
+      form = tids.map((tk) => {
         const t = TR[tk];
         const cur = myLevel(tk);
         const next = t.levels[cur];
+        const c = st.cats[t.cat];
         const pending = Object.values(S.myEntries).some((e) => e.cat === t.cat && e.status === 'pending');
-        return `<div class="stat" style="margin-bottom:10px"><div class="k">${t.ic} ${t.name} · 현재 <b style="color:var(--text)">${esc(window.Tracks.levelName(tk, cur))}</b></div>
-          ${next ? `<div style="margin:6px 0"><b>다음: ${esc(next.name)}</b>${next.songs ? ` <span class="muted">(${esc(next.songs)})</span>` : ''}<br><span class="muted">${esc(next.cond)}</span></div>
-            ${pending ? '<span class="pill warn">심사 신청함 — 선생님 확인 대기</span>' : `<button class="btn primary" data-lv="${tk}">${esc(next.name)} 승급 심사 신청</button>`}`
+        return `<div class="stat" style="margin-bottom:10px"><div class="k">${esc(t.ic)} ${esc(t.name)} · 현재 <b style="color:var(--text)">${esc(window.Tracks.levelName(tk, cur))}</b>${c ? ` · 승급하면 ${signed(c.points)}점` : ''}</div>
+          ${next ? `<div style="margin:6px 0"><b>다음: ${esc(next.name)}</b>${next.songs ? ` <span class="muted">(${esc(next.songs)})</span>` : ''}<br><span class="muted">${esc(next.cond)}</span>${next.reward ? `<br><span class="muted">🎁 ${esc(next.reward)}</span>` : ''}</div>
+            ${pending ? '<span class="pill warn">심사 신청함 — 선생님 확인 대기</span>' : `<button class="btn primary" data-lv="${esc(tk)}">${esc(next.name)} 승급 심사 신청</button>`}`
             : '<div style="margin-top:6px">🏆 최고 급수 달성!</div>'}</div>`;
-      }).join('') + `<p class="note">선생님 앞에서 심사를 통과하면 선생님이 승인해 줘요. 승급하면 ${signed(st.cats.lvTyping.points)}점 (한 달에 트랙별 1번까지)</p>`;
+      }).join('') + (tids.length ? '<p class="note">선생님 앞에서 심사를 통과하면 선생님이 승인해 줘요. (한 달에 급수표마다 점수는 정해진 횟수까지)</p>' : '<p class="empty">아직 급수표가 없어요.</p>');
     }
     return `<div class="panel"><h3>✍️ 기록하기 <span class="muted">선생님이 확인하면 점수에 반영돼요</span></h3>
       ${closed ? `<p class="empty">${esc(T.monthLabel(m))}은 이미 마감되었어요. 다음 달 1일부터 다시 기록할 수 있어요.</p>` : `
@@ -501,7 +504,7 @@
     const list = Object.entries(S.myEntries).map(([id, e]) => Object.assign({ id }, e))
       .filter((e) => e.month === m && e.by === 'student').sort((a, b) => b.ts - a.ts);
     el.innerHTML = list.map((e) => `<li><span class="status ${e.status}">${{ pending: '대기', approved: '승인', rejected: '반려' }[e.status]}</span>
-      <span>${CAT_IC[e.cat] || ''} <b>${esc(e.cat === 'unit' ? '단원평가' : st.cats[e.cat] ? st.cats[e.cat].name : e.cat)}</b> · ${esc(e.text)}</span>
+      <span>${esc(catIcon(e.cat))} <b>${esc(e.cat === 'unit' ? '단원평가' : st.cats[e.cat] ? st.cats[e.cat].name : e.cat)}</b> · ${esc(e.text)}</span>
       ${e.status === 'rejected' && e.reason ? `<span class="muted" style="font-size:.85em">사유: ${esc(e.reason)}</span>` : ''}
       <span class="right"><span class="muted" style="font-size:.85em">${fmtDate(e.ts)}</span>${e.status === 'pending' ? `<button class="btn xs ghost" data-del="${e.id}">취소</button>` : ''}</span></li>`).join('')
       || '<li class="empty">아직 기록이 없어요</li>';
@@ -537,7 +540,8 @@
       const tk = b.dataset.lv;
       const t = window.Tracks.TRACKS[tk];
       const next = myLevel(tk) + 1;
-      submit({ cat: t.cat, track: tk, level: next, text: `${t.name} ${t.levels[next - 1].name} 승급 심사` }, b);
+      if (!t || !t.levels[next - 1]) return;
+      submit({ cat: t.cat, track: tk, level: next, text: `${t.name} ${t.levels[next - 1].name} 승급 심사`.slice(0, 200) }, b);
     }));
     $('#sub-list').onclick = async (e) => {
       const b = e.target.closest('[data-del]');

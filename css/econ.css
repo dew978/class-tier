@@ -54,6 +54,18 @@ tr.hl td { background: rgba(255, 181, 71, .07); }
 .g-link .sp { flex: 1; }
 .stu-grid .job { font-size: .75em; color: var(--c-gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+.drop-zone.over { outline: 3px dashed var(--accent); outline-offset: -6px; background: #17224a; }
+
+/* ── 급수표 ── */
+.track-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 16px; }
+@media (max-width: 700px) { .track-cards { grid-template-columns: 1fr; } }
+.track-card .tbl td { font-size: .9em; }
+.te-wrap { max-height: 52vh; }
+.te-tbl input { padding: .35em .5em; font-size: .9em; min-width: 90px; }
+.te-tbl input.num-in { width: 105px; min-width: 0; text-align: right; }
+.te-tbl td { padding: 6px; }
+.danger-txt { color: #ff8a98; }
+
 /* ── 아바타 ── */
 .av { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 50%; overflow: hidden; flex: none;
   background: linear-gradient(145deg, #2c3a6e, #1c2548); border: 2px solid #33406e; }

@@ -56,7 +56,7 @@
 
   function mergeSettings(raw) {
     const s = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-    if (!raw) return s;
+    if (!raw) { addTrackCats(s, null); return s; }
     if (raw.thresholds) Object.assign(s.thresholds, raw.thresholds);
     if (raw.gradePct) for (const g of GRADES) if (isFinite(Number(raw.gradePct[g]))) s.gradePct[g] = Number(raw.gradePct[g]);
     if (raw.cats) for (const k of Object.keys(s.cats)) if (raw.cats[k]) Object.assign(s.cats[k], raw.cats[k], { who: s.cats[k].who });
@@ -67,7 +67,21 @@
     if (raw.rewardMoney) for (const k of Object.keys(s.rewardMoney)) s.rewardMoney[k] = Math.max(0, Math.round(Number(raw.rewardMoney[k]) || 0));
     if (typeof raw.showScores === 'boolean') s.showScores = raw.showScores;
     if (raw.svMode === 'student' || raw.svMode === 'teacher') s.svMode = raw.svMode;
+    addTrackCats(s, raw);
     return s;
+  }
+  // 선생님이 만든 급수표마다 승급 기록 종류(lv_아이디)를 더함. 지운 급수표도 지난 승급 점수를 위해 남기고 gone 표시
+  function addTrackCats(s, raw) {
+    const TR = window.Tracks;
+    const tracks = TR ? TR.editable(raw || null) : {};
+    const keys = new Set(raw && raw.cats ? Object.keys(raw.cats).filter((k) => k.startsWith('lv_')) : []);
+    for (const tid of Object.keys(tracks)) { const c = TR.catOf(tid); if (!s.cats[c]) keys.add(c); }
+    for (const c of keys) {
+      const r = (raw && raw.cats && raw.cats[c]) || {};
+      const t = tracks[c.slice(3)];
+      s.cats[c] = { name: r.name || `${t ? t.name : c.slice(3)} 승급`, points: isFinite(Number(r.points)) ? Number(r.points) : 10, cap: isFinite(Number(r.cap)) ? Number(r.cap) : 1, who: 'student', gone: !t };
+    }
+    if (TR) for (const tid of ['typing', 'recorder']) { const c = TR.catOf(tid); if (!tracks[tid] && s.cats[c]) s.cats[c].gone = true; }
   }
 
   // 월 키 (한국 시간 기준 로컬 날짜)
