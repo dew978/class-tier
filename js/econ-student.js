@@ -84,11 +84,12 @@
     const bonus = wageBonus();
     const gross = base + bonus;
     if (!gross) return '';
-    const rate = E.cfg().tax;
+    const c = E.cfg();
+    const rate = c.taxOn ? c.tax : 0;
     const x = E.taxOf(gross, rate);
     return `<div class="pay-prev"><div>급여 ${E.won(base)}${bonus ? ` + 급수 수당 ${E.won(bonus)}` : ''}</div>
-      <div>− 소득세 ${rate}% ${E.won(x)}</div><div class="net">= 받는 돈 <b>${E.won(gross - x)}</b></div>
-      <p class="note">소득세는 우리 반 국고에 모여요.${S.gov && S.gov.cash !== undefined ? ` (지금 국고 ${E.won(S.gov.cash)})` : ''}</p></div>`;
+      ${x ? `<div>− 소득세 ${rate}% ${E.won(x)}</div>` : ''}<div class="net">= 받는 돈 <b>${E.won(gross - x)}</b></div>
+      ${x ? `<p class="note">소득세는 우리 반 국고에 모여요.${S.gov && S.gov.cash !== undefined ? ` (지금 국고 ${E.won(S.gov.cash)})` : ''}</p>` : ''}</div>`;
   }
 
   /* ── 상점 ── */
@@ -381,7 +382,7 @@
     const c = E.cfg();
     const list = Object.entries(S.jobs || {}).filter(([, j]) => j && j.on !== false).sort((a, b) => (a[1].ord ?? 999) - (b[1].ord ?? 999) || (b[1].w || 0) - (a[1].w || 0));
     const mine = myJobs();
-    return `${A.svCard ? A.svCard().replace('style="margin-top:16px"', 'style="margin-bottom:16px"') : ''}<div class="panel"><h3>💼 우리 반 직업 <span class="muted">급여에서 소득세 ${c.tax}%를 떼어 국고에 모아요</span></h3>
+    return `${A.svCard ? A.svCard().replace('style="margin-top:16px"', 'style="margin-bottom:16px"') : ''}<div class="panel"><h3>💼 우리 반 직업 <span class="muted">${c.taxOn && c.tax ? `급여에서 소득세 ${c.tax}%를 떼어 국고에 모아요` : '급여에서 소득세를 떼지 않아요'}</span></h3>
       ${mine.length ? `<div class="my-jobs">나의 직업: ${mine.map(([, j]) => `<span class="pill good">${esc(j.t)}</span>`).join(' ')}</div>` : ''}
       ${payPreview(mine)}
       ${list.length ? `<div class="job-grid">${list.map(([, j]) => {

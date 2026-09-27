@@ -10,6 +10,8 @@
 
   const DEFAULTS = {
     unit: '원',
+    // 급여 소득세: 뗄지 말지(taxOn)와 세율(%) — 선생님이 급여 화면에서 정함
+    taxOn: true,
     tax: 10,
     cats: ['권리', '고정지출', '공동구매'],
     bank: { on: true, days: 7, min: 1000, rates: { S: 2, A: 1.5, B: 1 }, def: 'B' },
@@ -24,6 +26,7 @@
     if (!r) return c;
     if (r.unit) c.unit = r.unit;
     if (r.tax !== undefined && isFinite(r.tax)) c.tax = Number(r.tax);
+    if (r.taxOn === false) c.taxOn = false;
     if (Array.isArray(r.cats)) c.cats = r.cats.filter(Boolean);
     if (r.bank) { Object.assign(c.bank, r.bank); if (r.bank.rates) c.bank.rates = Object.assign({}, r.bank.rates); }
     if (r.trade) Object.assign(c.trade, r.trade);
@@ -98,7 +101,7 @@
     switch (e.k) {
       case 'send': t = e.m || base; if (e.src === 'gov') sub = '국고에서'; if (e.x) sub = `${sub ? sub + ' · ' : ''}세전 ${won(e.g)} · 세금 ${won(e.x)}`; break;
       case 'take': t = e.m || base; if (e.src === 'gov') sub = '국고로'; break;
-      case 'wage': t = `급여${e.n ? ` · ${e.n}` : ''}`; sub = `세전 ${won(e.g)} · 소득세 ${won(e.x)}`; if (e.m) sub += ` · ${e.m}`; break;
+      case 'wage': t = `급여${e.n ? ` · ${e.n}` : ''}`; sub = [e.x ? `세전 ${won(e.g)} · 소득세 ${won(e.x)}` : '', e.m].filter(Boolean).join(' · '); break;
       case 'prize': case 'reward': case 'adj': case 'gadj': t = e.m || base; if (e.x) sub = `세전 ${won(e.g)} · 세금 ${won(e.x)}`; break;
       case 'item': t = `${e.n || '아이템'} ${e.q > 0 ? '+' : ''}${e.q}개`; sub = e.m || '선생님이 조정'; break;
       case 'buy': t = `${e.n || '아이템'} ${e.q}개 구매`; break;
@@ -263,7 +266,7 @@
       }
       if (taxSum) addOp(upd, GOV, { k: 'tax', a: taxSum, m: `소득세 (${rows.length}명)`, pr });
       upd['config/econ/lastPay'] = B.ts();
-      return commit(upd, `${rows.length}명에게 급여를 보냈어요. 소득세 ${won(taxSum)}은 국고로 들어갔어요.`);
+      return commit(upd, `${rows.length}명에게 급여를 보냈어요.${taxSum ? ` 소득세 ${won(taxSum)}은 국고로 들어갔어요.` : ''}`);
     },
     adjust(uid, newCash, memo) {
       const cur = acctOf(uid).cash || 0;

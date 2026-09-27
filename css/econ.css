@@ -226,6 +226,12 @@ label.mini select { width: auto; padding: .3em .5em; }
 .grp-con { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: .88em; }
 
 /* 급여 */
+.pay-tax { display: flex; align-items: center; gap: 10px 16px; flex-wrap: wrap; margin: 4px 0 12px; padding: 10px 14px; border-radius: 12px; background: #10183a; border: 1px solid var(--line); }
+.pay-tax label { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 1em; color: var(--text); font-weight: 700; }
+.pay-tax .pay-on { cursor: pointer; }
+.pay-tax .pay-rate input { width: 84px; padding: .35em .5em; text-align: right; }
+.pay-tax .pay-rate input:disabled { opacity: .4; }
+.pay-tax .muted { font-size: .85em; }
 .pay-tbl input { padding: .3em .45em; text-align: right; }
 .pay-tbl td, .pay-tbl th { white-space: nowrap; }
 

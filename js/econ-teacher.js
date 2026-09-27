@@ -449,6 +449,10 @@
   const payExtra = {};
   let payMemo = '';
   let payOff = new Set();
+  let taxDraft = null; // 세율을 고치는 중이면 저장 전에도 표에 바로 보여 줌
+  const clampRate = (v) => Math.max(0, Math.min(100, Number(v) || 0));
+  // 이번 급여에 쓸 소득세율: 「소득세 떼기」를 끄면 0
+  const payRate = () => { const c = E.cfg(); return c.taxOn ? (taxDraft ?? c.tax) : 0; };
   TC.addTab('jobs', '직업·급여', () => {
     main().innerHTML = `<div class="a-head"><h2>직업·급여</h2><span class="muted" id="jb-info"></span><span class="sp"></span><button class="btn primary" data-j="new">+ 새 직업</button></div>
       <div class="tbl-wrap" id="jb-table"></div><div class="panel" id="jb-pay" style="margin-top:16px"></div>`;
@@ -457,14 +461,29 @@
       const x = e.target.closest('[data-extra]');
       if (x) { payExtra[x.dataset.extra] = Math.round(Number(x.value) || 0); drawPayTotals(); }
       if (e.target.id === 'pay-memo') payMemo = e.target.value;
+      if (e.target.id === 'pay-rate') { taxDraft = clampRate(e.target.value); drawPayTotals(); }
     };
-    main().onchange = (e) => {
+    main().onchange = async (e) => {
       const c = e.target.closest('[data-payon]');
       if (c) { c.checked ? payOff.delete(c.dataset.payon) : payOff.add(c.dataset.payon); drawPayTotals(); }
+      if (e.target.id === 'pay-taxon') {
+        const on = e.target.checked;
+        await B.set('config/econ/taxOn', on);
+        drawPayTotals();
+        toast(on ? '급여에서 소득세를 떼요.' : '급여에서 소득세를 떼지 않아요.', 'good');
+      }
+      if (e.target.id === 'pay-rate') {
+        const r = clampRate(e.target.value);
+        e.target.value = r;
+        await B.set('config/econ/tax', r);
+        taxDraft = null;
+        drawPayTotals();
+        toast(`소득세율을 ${r}%로 정했어요.`, 'good');
+      }
     };
   }, () => {
     const c = E.cfg();
-    $('#jb-info').textContent = `소득세 ${c.tax}% (경제 설정에서 변경) · 마지막 급여 ${c.lastPay ? fmtTime(c.lastPay) : '없음'}`;
+    $('#jb-info').textContent = `마지막 급여 ${c.lastPay ? fmtTime(c.lastPay) : '없음'}`;
     const jobs = sortBy(S.jobs, (a, b) => (b.w || 0) - (a.w || 0));
     $('#jb-table').innerHTML = jobs.length ? `<table class="tbl"><thead><tr><th>직업</th><th class="num">급여</th><th>맡은 학생</th><th>사용</th><th></th></tr></thead><tbody>
       ${jobs.map(([jid, j]) => { const mem = Object.keys(j.mem || {}).filter((u) => S.users[u]); return `<tr class="${j.on === false ? 'off' : ''}"><td><b>${esc(j.t)}</b>${j.d ? `<div class="muted f-sub">${esc(j.d)}</div>` : ''}</td><td class="num">${E.won(j.w || 0)}</td>
@@ -475,7 +494,7 @@
     drawPay();
   });
   function payRows() {
-    const c = E.cfg();
+    const rate = payRate();
     const lv = (u) => TC.levelsOf(u);
     return stuIds().map((u) => {
       const js = Object.values(S.jobs || {}).filter((j) => j && j.on !== false && j.mem && j.mem[u]);
@@ -484,7 +503,7 @@
       const bonus = window.Tracks.wageBonusAll(L);
       const extra = payExtra[u] || 0;
       const g = Math.max(0, base + bonus + extra);
-      const x = E.taxOf(g, c.tax);
+      const x = E.taxOf(g, rate);
       return { u, js, base, bonus, extra, g, x, n: [...js.map((j) => j.t), bonus ? '급수 수당' : ''].filter(Boolean).join(', ') };
     });
   }
@@ -497,11 +516,14 @@
     const rows = payRows();
     const svd = (u) => (TC.svDaysThisWeek ? TC.svDaysThisWeek(u) : 0);
     el.innerHTML = `<h3>💰 급여 보내기 <span class="muted">급수 수당 = 타자·리코더 급수표의 「주급 추가」 · 1인1역 = 이번 주(월~일) 인정된 날 · 「추가」에 −를 넣으면 깎여요</span></h3>
-      <div class="tbl-wrap"><table class="tbl pay-tbl"><thead><tr><th></th><th>학생</th><th>직업</th><th class="num">1인1역</th><th class="num">기본급</th><th class="num">급수 수당</th><th class="num">추가</th><th class="num">세전</th><th class="num">소득세 ${c.tax}%</th><th class="num">받는 돈</th></tr></thead><tbody>
+      <div class="pay-tax"><label class="pay-on"><span class="switch"><input type="checkbox" id="pay-taxon" ${c.taxOn ? 'checked' : ''}><i></i></span>소득세 떼기</label>
+        <label class="pay-rate">세율<input id="pay-rate" type="number" min="0" max="100" step="0.5" value="${taxDraft ?? c.tax}" ${c.taxOn ? '' : 'disabled'}>%</label>
+        <span class="muted">떼인 세금은 국고로 가요 · 바꾸면 바로 저장되고 학생 「직업」 화면에도 보여요</span></div>
+      <div class="tbl-wrap"><table class="tbl pay-tbl"><thead><tr><th></th><th>학생</th><th>직업</th><th class="num">1인1역</th><th class="num">기본급</th><th class="num">급수 수당</th><th class="num">추가</th><th class="num">세전</th><th class="num" id="pay-thx"></th><th class="num">받는 돈</th></tr></thead><tbody>
       ${rows.map((r) => `<tr class="${r.g ? '' : 'off'}"><td><input type="checkbox" class="chk" data-payon="${r.u}" ${payOff.has(r.u) || !r.g ? '' : 'checked'} ${r.g ? '' : 'disabled'}></td><td>${esc(nameOf(r.u))}</td><td class="muted">${esc(r.js.map((j) => j.t).join(', ') || '-')}</td>
         <td class="num">${r.js.length ? `${svd(r.u)}일` : '-'}</td>
         <td class="num">${E.num(r.base)}</td><td class="num">${r.bonus ? E.num(r.bonus) : '-'}</td><td class="num"><input type="number" step="10000" data-extra="${r.u}" value="${payExtra[r.u] || ''}" placeholder="0" style="width:95px"></td>
-        <td class="num" data-pg="${r.u}">${E.num(r.g)}</td><td class="num" data-px="${r.u}">${E.num(r.x)}</td><td class="num"><b data-pn="${r.u}">${E.num(r.g - r.x)}</b></td></tr>`).join('')}
+        <td class="num" data-pg="${r.u}">${E.num(r.g)}</td><td class="num" data-px="${r.u}">${r.x ? E.num(r.x) : '-'}</td><td class="num"><b data-pn="${r.u}">${E.num(r.g - r.x)}</b></td></tr>`).join('')}
       </tbody></table></div>
       <div class="form-grid" style="margin-top:10px"><label>메모 (학생 기록에 보여요)<input id="pay-memo" maxlength="40" value="${esc(payMemo)}" placeholder="예: 9월 4주 주급"></label></div>
       <p class="note" id="pay-sum"></p>
@@ -509,16 +531,22 @@
     drawPayTotals();
   }
   function drawPayTotals() {
+    const c = E.cfg();
+    const rate = payRate();
     const rows = payRows();
     let g = 0, x = 0, n = 0;
     for (const r of rows) {
       const on = r.g > 0 && !payOff.has(r.u);
       const pg = $(`[data-pg="${r.u}"]`);
-      if (pg) { pg.textContent = E.num(r.g); $(`[data-px="${r.u}"]`).textContent = E.num(r.x); $(`[data-pn="${r.u}"]`).textContent = E.num(r.g - r.x); }
+      if (pg) { pg.textContent = E.num(r.g); $(`[data-px="${r.u}"]`).textContent = r.x ? E.num(r.x) : '-'; $(`[data-pn="${r.u}"]`).textContent = E.num(r.g - r.x); }
       if (on) { g += r.g; x += r.x; n++; }
     }
+    const th = $('#pay-thx');
+    if (th) th.textContent = c.taxOn ? `소득세 ${rate}%` : '소득세 (안 뗌)';
+    const ri = $('#pay-rate');
+    if (ri) ri.disabled = !c.taxOn;
     const el = $('#pay-sum');
-    if (el) el.innerHTML = `${n}명 · 세전 ${E.won(g)} · 소득세 ${E.won(x)} (국고로) · 학생이 받는 돈 <b>${E.won(g - x)}</b>`;
+    if (el) el.innerHTML = `${n}명 · 세전 ${E.won(g)} · ${c.taxOn ? `소득세 ${rate}% ${E.won(x)} (국고로)` : '소득세 안 뗌'} · 학생이 받는 돈 <b>${E.won(g - x)}</b>`;
   }
   async function onJobs(e) {
     const sw = e.target.closest('[data-jon]');
@@ -536,7 +564,8 @@
       const rows = payRows().filter((r) => r.g > 0 && !payOff.has(r.u));
       if (!rows.length) return toast('급여를 받을 학생이 없어요. 직업을 먼저 정해 주세요.', 'bad');
       const g = rows.reduce((n, r) => n + r.g, 0), x = rows.reduce((n, r) => n + r.x, 0);
-      if (!(await confirmBox('급여 보내기', `${rows.length}명에게 세전 ${E.won(g)}을 보내고, 소득세 ${E.won(x)}은 국고에 넣을까요?${payMemo ? `<br>메모: ${esc(payMemo)}` : ''}`, '보내기'))) return;
+      const q = x ? `${rows.length}명에게 세전 ${E.won(g)}을 보내고, 소득세 ${E.won(x)}은 국고에 넣을까요?` : `${rows.length}명에게 급여 ${E.won(g)}을 보낼까요? (소득세 안 뗌)`;
+      if (!(await confirmBox('급여 보내기', `${q}${payMemo ? `<br>메모: ${esc(payMemo)}` : ''}`, '보내기'))) return;
       b.disabled = true;
       if (await E.ops.payroll(rows, payMemo)) { for (const k of Object.keys(payExtra)) delete payExtra[k]; payMemo = ''; $('#jb-pay').innerHTML = ''; drawPay(); }
       b.disabled = false;
@@ -772,7 +801,8 @@
     main().innerHTML = `<div class="a-head"><h2>경제 설정</h2><span class="sp"></span><button class="btn primary" id="es-save">저장</button></div>
       <div class="two-col"><div class="col" style="gap:16px">
         <div class="panel"><h3>기본</h3><div class="form-grid"><label>화폐 단위<input id="es-unit" maxlength="6" value="${esc(c.unit)}"></label>
-          <label>소득세율 (%)<input id="es-tax" type="number" min="0" max="100" step="0.5" value="${c.tax}"><small>급여에서 떼어 국고로 보내요</small></label></div></div>
+          <label>소득세율 (%)<input id="es-tax" type="number" min="0" max="100" step="0.5" value="${c.tax}"><small>급여에서 떼어 국고로 보내요</small></label></div>
+          <label class="chk-line"><input type="checkbox" class="chk" id="es-taxon" ${c.taxOn ? 'checked' : ''}> 급여에서 소득세 떼기 <span class="muted">(「직업·급여」 화면에서도 바꿀 수 있어요)</span></label></div>
         <div class="panel"><h3>학생 화면 메뉴</h3><div class="chk-grid">${Object.entries(menuNames).map(([k, n]) => `<label class="chk-line"><input type="checkbox" class="chk" data-menu="${k}" ${c.menus[k] !== false ? 'checked' : ''}> ${n}</label>`).join('')}</div>
           <p class="note">끄면 학생 화면에서 그 메뉴가 사라지고, 그 기능(구매·예금·거래)도 막혀요.</p></div>
         <div class="panel"><h3>상점 분류</h3><input id="es-cats" value="${esc(c.cats.join(', '))}"><p class="note">쉼표로 나눠 적어요. 예: 권리, 고정지출, 간식</p></div>
@@ -806,6 +836,7 @@
       const v = (id) => $(id).value.trim();
       raw.unit = v('#es-unit') || '원';
       raw.tax = Math.max(0, Math.min(100, Number(v('#es-tax')) || 0));
+      raw.taxOn = $('#es-taxon').checked;
       raw.menus = {};
       $$('[data-menu]').forEach((i) => (raw.menus[i.dataset.menu] = i.checked));
       raw.cats = [...new Set(v('#es-cats').split(',').map((x) => x.trim()).filter(Boolean))];
