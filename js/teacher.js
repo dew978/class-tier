@@ -128,7 +128,9 @@
     const col = { champion: 'var(--c-champion)', diamond: 'var(--c-diamond)', platinum: 'var(--c-platinum)', gold: 'var(--c-gold)', silver: 'var(--c-silver)', bronze: 'var(--c-bronze)' };
     $('#bd-dist').innerHTML = `<h3>티어 분포 <span class="muted">${esc(T.monthLabel(m))}${closed ? ' 확정' : ' 현재'}</span></h3><div class="tier-bars">${Object.keys(dist).map((k) => `<div class="tb">${tierChip(k)}<div class="bar"><i style="width:${(dist[k] / max) * 100}%;background:${col[k]}"></i></div><b>${dist[k]}</b></div>`).join('')}</div>`;
     const st = A.settings();
-    $('#bd-note').innerHTML = `<b>계산 방식</b><br>· 매달 1000점에서 시작 · 경쟁 활동은 반 안 상대평가(작게 최대 ±${T.K_PRESETS.small.k / 2} / 보통 ±${T.K_PRESETS.normal.k / 2} / 크게 ±${T.K_PRESETS.large.k / 2})<br>
+    $('#bd-note').innerHTML = `<b>계산 방식</b><br>· 매달 1000점에서 시작<br>
+      · 순위·점수 방식: 반 안 상대평가(작게 최대 ±${T.K_PRESETS.small.k / 2} / 보통 ±${T.K_PRESETS.normal.k / 2} / 크게 ±${T.K_PRESETS.large.k / 2}). 점수 방식에 기준 점수를 정하면 기준보다 높으면 오르고 낮으면 내려감<br>
+      · 등급 방식: 기준 점수 × ${T.GRADES.map((g) => `${g} ${st.gradePct[g]}%`).join(' · ')}<br>
       · 생활 점수: ${Object.values(st.cats).map((c) => `${esc(c.name)} ${signed(c.points)}${c.cap ? `(월 ${c.cap}회)` : ''}`).join(' · ')}<br>
       · 티어: 실버 ${st.thresholds.silver} · 골드 ${st.thresholds.gold} · 플래티넘 ${st.thresholds.platinum} · 다이아 ${st.thresholds.diamond}, 챔피언 = 1위<br>
       · 활동·기록을 고치거나 지우면 그달 점수가 자동으로 다시 계산돼요.`;
@@ -241,9 +243,15 @@
     $('#ac-month').innerHTML = monthOptions(actMonth);
     const list = Object.entries(acts).map(([id, a]) => Object.assign({ id }, a)).filter((a) => a.month === actMonth).sort((a, b) => b.at - a.at);
     const closed = isClosed(actMonth);
-    $('#ac-table').innerHTML = list.length ? `<table class="tbl"><thead><tr><th>날짜</th><th>활동</th><th>종류</th><th>입력 방식</th><th>변동 폭</th><th class="num">참가</th><th></th></tr></thead><tbody>
+    const rule = (a) => {
+      const k = T.K_PRESETS[a.weight] || T.K_PRESETS.normal;
+      if (a.mode === 'grade') return `매우잘함 +${T.gradeBase(a)} (기준 점수)`;
+      if (T.hasCut(a)) return `기준 ${a.cut}점 · 최대 ±${k.k / 2}`;
+      return `상대평가 · ${k.name} (±${k.k / 2})`;
+    };
+    $('#ac-table').innerHTML = list.length ? `<table class="tbl"><thead><tr><th>날짜</th><th>활동</th><th>종류</th><th>입력 방식</th><th>점수 규칙</th><th class="num">참가</th><th></th></tr></thead><tbody>
       ${list.map((a) => `<tr><td>${fmtDate(a.at)}</td><td><b>${esc(a.name)}</b></td><td>${esc(T.KIND_NAMES[a.kind] || '')}</td><td>${esc((T.MODE_NAMES[a.mode] || '').split(' ')[0])}</td>
-        <td>${esc((T.K_PRESETS[a.weight] || T.K_PRESETS.normal).name)} (±${(T.K_PRESETS[a.weight] || T.K_PRESETS.normal).k / 2})</td>
+        <td>${esc(rule(a))}</td>
         <td class="num">${Object.values(a.results || {}).filter((v) => v !== '' && v !== null).length}명</td>
         <td><div class="row-actions"><button class="btn xs" data-a="edit" data-id="${a.id}">${closed ? '보기' : '수정'}</button>${closed ? '' : `<button class="btn xs danger" data-a="del" data-id="${a.id}">삭제</button>`}</div></td></tr>`).join('')}
       </tbody></table>` : `<p class="empty" style="padding:30px">${esc(T.monthLabel(actMonth))}에 입력한 활동이 없어요.</p>`;
@@ -263,19 +271,38 @@
         <label>활동 이름<input id="af-name" value="${esc(draft.name)}" placeholder="예: 5단원 수행평가 (글쓰기)"></label>
         <label>종류<select id="af-kind">${Object.entries(T.KIND_NAMES).map(([k, v]) => `<option value="${k}" ${draft.kind === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         <label>입력 방식<select id="af-mode">${Object.entries(T.MODE_NAMES).map(([k, v]) => `<option value="${k}" ${draft.mode === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-        <label>점수 변동 폭<select id="af-weight">${Object.entries(T.K_PRESETS).map(([k, v]) => `<option value="${k}" ${draft.weight === k ? 'selected' : ''}>${v.name} (최대 ±${v.k / 2})</option>`).join('')}</select></label>
+        <label data-show="score rank">점수 변동 폭<select id="af-weight">${Object.entries(T.K_PRESETS).map(([k, v]) => `<option value="${k}" ${draft.weight === k ? 'selected' : ''}>${v.name} (최대 ±${v.k / 2})</option>`).join('')}</select></label>
+        <label data-show="score">기준 점수 <span style="font-size:.85em">(선택)</span><input id="af-cut" type="number" step="any" value="${esc(draft.cut ?? '')}" placeholder="예: 80 — 비우면 순수 상대평가"></label>
+        <label data-show="grade">기준 점수 <span style="font-size:.85em">(매우잘함일 때 오르는 점수)</span><input id="af-base" type="number" min="1" value="${esc(draft.base ?? T.DEFAULT_GRADE_BASE)}"></label>
         <label>날짜<input id="af-date" type="date" value="${date0}"></label>
       </div>
-      <p class="note">빈칸 = 불참(점수 변화 없음). 모둠 활동은 같은 모둠 학생에게 같은 순위를 입력하세요. 결과는 <b>선생님과 본인만</b> 볼 수 있어요.</p>
+      <p class="note" id="af-help"></p>
+      <p class="note">빈칸 = 불참(점수 변화 없음). 결과는 <b>선생님과 본인만</b> 볼 수 있어요.</p>
       <div class="tbl-wrap"><table class="tbl res-table"><thead><tr><th>학생</th><th>결과</th><th class="num">예상 변동</th></tr></thead><tbody id="af-rows"></tbody></table></div>
       <div class="foot"><button class="btn ghost" data-close>닫기</button>${readonly ? '' : '<button class="btn" id="af-prev">변동 미리보기</button><button class="btn primary" id="af-save">저장</button>'}</div>`, { wide: true, dismissable: false });
     const el = m.el;
+    if (readonly) el.querySelectorAll('.form-grid input, .form-grid select').forEach((i) => (i.disabled = true));
+    // 입력 방식에 따라 필요한 칸과 설명만 보이기
+    const syncFields = () => {
+      const mode = el.querySelector('#af-mode').value;
+      el.querySelectorAll('[data-show]').forEach((l) => l.classList.toggle('hidden', !l.dataset.show.split(' ').includes(mode)));
+      const pct = A.settings().gradePct;
+      const base = Number(el.querySelector('#af-base').value) || T.DEFAULT_GRADE_BASE;
+      el.querySelector('#af-help').innerHTML = mode === 'grade'
+        ? `<b>등급 방식(절대평가)</b>: ${T.GRADES.map((g) => `${g} ${signed(Math.round((base * pct[g]) / 100))}`).join(' · ')} <span class="muted">(등급별 비율은 「설정」에서 변경)</span>`
+        : mode === 'score'
+          ? '<b>점수 방식</b>: 기준 점수를 적으면 <b>기준보다 높은 학생은 오르고 낮은 학생은 내려가요.</b> 기준에서 가장 멀리 떨어진 학생이 최대 변동을 받고, 나머지는 거리에 비례해요. 이번 달 점수가 높은 학생은 조금 덜 오르고 조금 더 내려가요(상대 보정). 기준 점수를 비우면 반 친구들끼리 비교하는 순수 상대평가예요.'
+          : '<b>순위 방식</b>: 반 친구들끼리 비교하는 상대평가예요. 모둠 활동은 같은 모둠에 같은 순위를 입력하세요.';
+    };
+    syncFields();
+    el.querySelector('#af-base').oninput = syncFields;
     const drawRows = () => {
       const mode = el.querySelector('#af-mode').value;
       el.querySelector('#af-rows').innerHTML = ids.map((u) => {
-        const v = draft.results[u] ?? '';
+        const v0 = draft.results[u] ?? '';
+        const v = T.GRADE_ALIAS[v0] || v0;
         const input = mode === 'grade'
-          ? `<select data-r="${u}" ${readonly ? 'disabled' : ''}><option value=""></option>${Object.keys(T.GRADE_VALUES).map((g) => `<option ${v === g ? 'selected' : ''}>${g}</option>`).join('')}</select>`
+          ? `<select data-r="${u}" ${readonly ? 'disabled' : ''}><option value=""></option>${T.GRADES.map((g) => `<option ${v === g ? 'selected' : ''}>${g}</option>`).join('')}</select>`
           : `<input data-r="${u}" type="number" step="any" value="${esc(v)}" placeholder="${mode === 'rank' ? '순위' : '점수'}" ${readonly ? 'disabled' : ''}>`;
         return `<tr><td>${nameTag(u)}</td><td>${input}</td><td class="num delta-cell" data-d="${u}"></td></tr>`;
       }).join('');
@@ -285,6 +312,9 @@
       draft.kind = el.querySelector('#af-kind').value;
       draft.mode = el.querySelector('#af-mode').value;
       draft.weight = el.querySelector('#af-weight').value;
+      const cut = el.querySelector('#af-cut').value.trim();
+      draft.cut = draft.mode === 'score' && cut !== '' && isFinite(Number(cut)) ? Number(cut) : null;
+      draft.base = draft.mode === 'grade' ? Math.max(1, Number(el.querySelector('#af-base').value) || T.DEFAULT_GRADE_BASE) : null;
       draft.results = {};
       el.querySelectorAll('[data-r]').forEach((i) => { if (i.value !== '') draft.results[i.dataset.r] = draft.mode === 'grade' ? i.value : Number(i.value); });
       const date = el.querySelector('#af-date').value || todayStr(B.now());
@@ -303,7 +333,7 @@
       }
     };
     drawRows();
-    el.querySelector('#af-mode').onchange = () => { collect(); draft.results = {}; drawRows(); };
+    el.querySelector('#af-mode').onchange = () => { collect(); draft.results = {}; drawRows(); syncFields(); };
     if (readonly || a0) preview();
     if (!readonly) {
       el.querySelector('#af-prev').onclick = preview;
@@ -311,7 +341,8 @@
         collect();
         if (!draft.name) return toast('활동 이름을 입력하세요.', 'bad');
         if (isClosed(draft.month)) return toast(`${T.monthLabel(draft.month)}은 마감되었어요. 날짜를 확인하세요.`, 'bad');
-        if (Object.keys(draft.results).length < 2) return toast('2명 이상의 결과를 입력하세요.', 'bad');
+        if (draft.mode !== 'grade' && Object.keys(draft.results).length < 2) return toast('2명 이상의 결과를 입력하세요.', 'bad');
+        if (!Object.keys(draft.results).length) return toast('결과를 입력하세요.', 'bad');
         const aid = id || B.newKey();
         draft.createdAt = draft.createdAt || B.now();
         await B.set('activities/' + aid, draft);
@@ -561,6 +592,8 @@
           ${Object.entries(st.cats).map(([k, c]) => `<tr><td><input data-cn="${k}" value="${esc(c.name)}"></td><td>${c.who === 'teacher' ? '선생님' : '학생→승인'}</td>
             <td><input data-cp="${k}" type="number" value="${c.points}" style="width:90px"></td><td><input data-cc="${k}" type="number" min="0" value="${c.cap}" style="width:90px"></td></tr>`).join('')}
           </tbody></table></div>
+        <div class="panel"><h3>등급 방식 비율 (수행평가 등)</h3><p class="note" style="margin-top:0">활동의 <b>기준 점수</b>에 곱하는 비율(%)이에요. 예: 기준 40점, 잘함 50% → +20점. 음수는 감점.</p>
+          <div class="form-grid">${T.GRADES.map((g) => `<label>${g} (%)<input data-gp="${g}" type="number" value="${st.gradePct[g]}"></label>`).join('')}</div></div>
         <div class="panel"><h3>티어 기준 점수</h3><div class="form-grid">
           ${[['silver', '실버'], ['gold', '골드'], ['platinum', '플래티넘'], ['diamond', '다이아']].map(([k, l]) => `<label>${l} 이상<input data-th="${k}" type="number" value="${st.thresholds[k]}"></label>`).join('')}
           </div><label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" class="chk" id="st-show" ${st.showScores ? 'checked' : ''}> 학생 순위표에 다른 친구의 총점도 보여주기</label>
@@ -583,6 +616,12 @@
       for (const k of ['silver', 'gold', 'platinum', 'diamond']) raw.thresholds[k] = Number($(`[data-th="${k}"]`).value);
       const t = raw.thresholds;
       if (!(t.silver < t.gold && t.gold < t.platinum && t.platinum < t.diamond)) return toast('티어 기준은 실버 < 골드 < 플래티넘 < 다이아 순이어야 해요.', 'bad');
+      raw.gradePct = {};
+      for (const g of T.GRADES) {
+        const v = Number($(`[data-gp="${g}"]`).value);
+        if (!isFinite(v)) return toast('등급 비율을 확인하세요.', 'bad');
+        raw.gradePct[g] = v;
+      }
       raw.showScores = $('#st-show').checked;
       await B.set('config/settings', raw);
       toast('저장했어요. 진행 중인 달의 점수가 다시 계산돼요.', 'good');

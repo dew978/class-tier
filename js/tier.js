@@ -4,6 +4,10 @@
        Δ = K / (참가자수-1) × Σ(실제결과 − 기대승률)
      기대승률 = 1 / (1 + 10^((상대점수 − 내점수)/400))  → 점수가 높은 친구보다 잘하면 더 많이 오름 (오목 상대 보정과 같은 원리)
      반 전체 점수 합은 유지됩니다(반올림 오차 제외).
+     · 점수 방식 + 기준 점수: 기준보다 높으면 오르고 낮으면 내려감(부호는 기준이 결정).
+       크기 = 최대 변동 × (내 점수 − 기준) ÷ (반에서 기준과 가장 멀리 떨어진 거리) × 상대 보정
+       상대 보정: 이번 달 점수가 높은 학생은 조금 덜 오르고 더 내려가며, 낮은 학생은 반대 (0.5~1.5배)
+     · 등급 방식: 기준 점수 × 등급 비율 (기본 매우잘함 100%, 잘함 50%, 보통 0%, 노력요함 −50%)
    - 누적 항목(칭찬·독서·과제·1인1역·감점): 배점만큼 더하고 빼며, 항목별 월 한도를 넘으면 0점.
    활동을 고치거나 지우면 그달 전체가 자동으로 다시 계산됩니다. */
 (function () {
@@ -16,12 +20,16 @@
     { id: 'diamond', name: '다이아' },
   ];
   const KIND_NAMES = { perf: '수행평가', contest: '학급 대회·경쟁활동' };
-  const MODE_NAMES = { score: '점수 (높을수록 좋음)', rank: '순위 (1등이 가장 좋음)', grade: '등급 (잘함·보통·노력)' };
-  const GRADE_VALUES = { 잘함: 3, 보통: 2, 노력: 1 };
+  const MODE_NAMES = { score: '점수 (높을수록 좋음)', rank: '순위 (1등이 가장 좋음)', grade: '등급 (매우잘함·잘함·보통·노력요함)' };
+  const GRADES = ['매우잘함', '잘함', '보통', '노력요함'];
+  const GRADE_VALUES = { 매우잘함: 4, 잘함: 3, 보통: 2, 노력요함: 1 };
+  const GRADE_ALIAS = { 노력: '노력요함' }; // 이전 3등급 기록 호환
   const K_PRESETS = { small: { name: '작게', k: 50 }, normal: { name: '보통', k: 80 }, large: { name: '크게', k: 110 } };
+  const DEFAULT_GRADE_BASE = 40;
 
   const DEFAULT_SETTINGS = {
     thresholds: { silver: 900, gold: 1000, platinum: 1100, diamond: 1175 },
+    gradePct: { 매우잘함: 100, 잘함: 50, 보통: 0, 노력요함: -50 },
     cats: {
       praise: { name: '칭찬', points: 5, cap: 0, who: 'teacher' },
       penalty: { name: '감점', points: -5, cap: 0, who: 'teacher' },
@@ -38,6 +46,7 @@
     const s = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     if (!raw) return s;
     if (raw.thresholds) Object.assign(s.thresholds, raw.thresholds);
+    if (raw.gradePct) for (const g of GRADES) if (isFinite(Number(raw.gradePct[g]))) s.gradePct[g] = Number(raw.gradePct[g]);
     if (raw.cats) for (const k of Object.keys(s.cats)) if (raw.cats[k]) Object.assign(s.cats[k], raw.cats[k]);
     if (raw.rewards) Object.assign(s.rewards, raw.rewards);
     if (typeof raw.showScores === 'boolean') s.showScores = raw.showScores;
@@ -70,7 +79,7 @@
   // 활동 결과값 → 비교용 숫자 (클수록 잘함). 값이 없으면 null(불참)
   function valueOf(mode, raw) {
     if (raw === undefined || raw === null || raw === '') return null;
-    if (mode === 'grade') return GRADE_VALUES[raw] ?? null;
+    if (mode === 'grade') return GRADE_VALUES[GRADE_ALIAS[raw] || raw] ?? null;
     const n = Number(raw);
     if (!isFinite(n)) return null;
     return mode === 'rank' ? -n : n;
@@ -93,6 +102,31 @@
     }
     return out;
   }
+
+  // 점수 방식 + 기준 점수: 기준보다 높으면 +, 낮으면 −. 크기는 반 안 상대적 거리 × 상대 보정
+  function cutDeltas(parts, ratings, K, cut) {
+    const out = {};
+    const B = K / 2;
+    const D = Math.max(0, ...parts.map((p) => Math.abs(p.v - cut)));
+    if (!parts.length || D === 0) { parts.forEach((p) => (out[p.uid] = 0)); return out; }
+    const avg = parts.reduce((s, p) => s + ratings[p.uid], 0) / parts.length;
+    for (const p of parts) {
+      const dist = p.v - cut;
+      if (dist === 0) { out[p.uid] = 0; continue; }
+      const e = 1 / (1 + Math.pow(10, (avg - ratings[p.uid]) / 400)); // 반 평균 대비 내 기대 승률
+      const mult = Math.min(1.5, Math.max(0.5, dist > 0 ? 2 * (1 - e) : 2 * e));
+      out[p.uid] = Math.round(B * (dist / D) * mult);
+    }
+    return out;
+  }
+  // 등급 방식: 기준 점수 × 등급 비율 (절대평가)
+  function gradeDeltas(parts, base, pct) {
+    const out = {};
+    for (const p of parts) out[p.uid] = Math.round((base * (pct[GRADE_ALIAS[p.raw] || p.raw] || 0)) / 100);
+    return out;
+  }
+  const hasCut = (a) => a.mode === 'score' && a.cut !== undefined && a.cut !== null && a.cut !== '' && isFinite(Number(a.cut));
+  const gradeBase = (a) => (isFinite(Number(a.base)) && Number(a.base) > 0 ? Number(a.base) : DEFAULT_GRADE_BASE);
 
   /* 한 달 계산
      users: {uid: {name}}   activities: {aid: activity}   entries: {uid: {eid: entry}}
@@ -130,7 +164,9 @@
           if (v !== null) parts.push({ uid, v, raw });
         }
         const K = (K_PRESETS[a.weight] || K_PRESETS.normal).k;
-        const d = eloDeltas(parts, R, K);
+        const d = a.mode === 'grade' ? gradeDeltas(parts, gradeBase(a), st.gradePct)
+          : hasCut(a) ? cutDeltas(parts, R, K, Number(a.cut))
+          : eloDeltas(parts, R, K);
         // 반 안 등수 (동점은 같은 등수)
         const sorted = parts.slice().sort((p, q) => q.v - p.v);
         const place = {};
@@ -173,7 +209,7 @@
   }
 
   window.Tier = {
-    START, TIER_LIST, KIND_NAMES, MODE_NAMES, GRADE_VALUES, K_PRESETS, DEFAULT_SETTINGS, STUDENT_CATS,
-    mergeSettings, monthKey, monthLabel, prevMonth, tierOf, valueOf, eloDeltas, compute,
+    START, TIER_LIST, KIND_NAMES, MODE_NAMES, GRADES, GRADE_VALUES, GRADE_ALIAS, K_PRESETS, DEFAULT_SETTINGS, DEFAULT_GRADE_BASE, STUDENT_CATS,
+    mergeSettings, monthKey, monthLabel, prevMonth, tierOf, valueOf, eloDeltas, cutDeltas, gradeDeltas, hasCut, gradeBase, compute,
   };
 })();

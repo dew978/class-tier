@@ -105,7 +105,9 @@
       if (S.screen === 'student') renderStudent();
       else if (S.screen === 'teacher' && window.Teacher) window.Teacher.render();
     };
-    if (document.hidden) setTimeout(run, 0); else requestAnimationFrame(run);
+    // 화면 갱신 신호(requestAnimationFrame)가 오지 않는 경우를 대비해 0.25초 뒤 한 번 더 시도
+    if (document.hidden) setTimeout(run, 0);
+    else { requestAnimationFrame(run); setTimeout(run, 250); }
   }
   document.addEventListener('visibilitychange', () => { renderPending = false; render(); });
 
@@ -291,7 +293,9 @@
       <div class="panel" style="margin-top:16px"><h3>📘 티어는 이렇게 정해져요</h3>
         <div class="note">
           · 매달 1일, 모두 <b>1000점</b>에서 새로 시작해요. 월말에 선생님이 마감하면 그달 티어와 보상이 확정돼요.<br>
-          · <b>수행평가·학급 대회</b>는 반 친구들과 결과를 비교해 점수가 오르내려요. 나보다 점수가 높은 친구보다 잘하면 더 많이 올라요.<br>
+          · <b>수행평가·학급 대회</b>는 반 친구들과 결과를 비교해 점수가 오르내려요. 나보다 점수가 높은 친구보다 잘하면 더 많이 올라요.
+            기준 점수가 있는 활동은 기준보다 잘하면 오르고, 못하면 내려가요.<br>
+          · <b>등급 평가</b>는 ${T.GRADES.map((g) => `${g} ${st.gradePct[g] > 0 ? '+' : ''}${st.gradePct[g]}%`).join(' · ')} (활동의 기준 점수 기준)<br>
           · <b>칭찬, 독서, 과제, 1인1역·봉사</b>는 할수록 점수가 쌓여요. (독서·과제·역할은 「기록하기」에서 제출 → 선생님 승인)<br>
           · 티어: 브론즈 ~${th.silver - 1} · 실버 ${th.silver}~ · 골드 ${th.gold}~ · 플래티넘 ${th.platinum}~ · 다이아 ${th.diamond}~ · <b>챔피언 = 그달 1위</b><br>
           · 이름 앞 엠블럼은 <b>지난달 확정 티어</b>예요.
