@@ -36,7 +36,9 @@ async function krx(code) {
   return yahoo(`${code}.KQ`);
 }
 
-const raw = DB ? await getJson(`${DB}/pub/symbols.json`).catch((e) => { console.warn('종목 목록을 읽지 못함:', e.message); return ''; }) : '';
+// 손으로 실행할 때 SYMBOLS(예: "KRX:005930,US:AAPL")를 주면 그 종목으로, 아니면 Firebase 공개 목록
+const raw = process.env.SYMBOLS ? process.env.SYMBOLS
+  : DB ? await getJson(`${DB}/pub/symbols.json`).catch((e) => { console.warn('종목 목록을 읽지 못함:', e.message); return ''; }) : '';
 const list = String(raw || '').split(',').map((s) => s.trim()).filter(Boolean);
 const res = { at: Date.now(), KRX: {}, US: {}, fx: null, err: {} };
 for (const item of list) {

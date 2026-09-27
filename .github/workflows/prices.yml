@@ -1,12 +1,17 @@
 # 주식 시세 — 평일 장중(한국 시간 09:00~16:55)에는 5분마다, 그 밖에는 1시간마다 시세를 받아 prices 브랜치에 올립니다.
 # 비밀 키가 필요 없습니다. (종목 목록은 Firebase 공개 경로 pub/symbols, 올리기는 GitHub가 주는 토큰)
-# ※ 이 파일을 저장소의 .github/workflows/prices.yml 로 넣어야 동작합니다 (README 「실제 주식 시세」 참고).
+# 손으로 실행할 때 symbols 에 "KRX:005930,US:AAPL" 처럼 적으면 그 종목으로 시험해 볼 수 있어요.
 name: 주식 시세
 on:
   schedule:
     - cron: '*/5 0-7 * * 1-5'
     - cron: '17 * * * *'
   workflow_dispatch:
+    inputs:
+      symbols:
+        description: '시험용 종목 (비우면 Firebase의 목록 사용)'
+        required: false
+        default: ''
 permissions:
   contents: write
 concurrency:
@@ -25,6 +30,7 @@ jobs:
         run: node tools/prices.mjs out/prices.json
         env:
           DB_URL: https://class-tier-default-rtdb.asia-southeast1.firebasedatabase.app
+          SYMBOLS: ${{ github.event.inputs.symbols }}
       - name: prices 브랜치에 올리기
         working-directory: out
         run: |
