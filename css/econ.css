@@ -15,6 +15,12 @@ h4 { margin: 16px 0 8px; font-size: .95em; color: var(--muted); }
 .down, .down-txt { color: var(--bad); } .up-txt { color: var(--good); } .warn-txt { color: var(--warn); }
 .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 900px) { .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) {
+  .grid4 { gap: 8px; }
+  .grid4 .stat { padding: 10px; }
+  .grid4 .stat .v, .econ-sum .v { font-size: 1.05em; }
+  .wh-total { font-size: 1.55em; }
+}
 .chk-line { display: flex !important; align-items: center; gap: 8px; color: var(--text) !important; margin: 10px 0; }
 .chk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 16px; }
 .warn-banner { background: linear-gradient(135deg, #3a2a12, #2c2140); box-shadow: none; border: 1px solid #5b4a18; }
