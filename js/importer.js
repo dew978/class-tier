@@ -1,6 +1,7 @@
 /* 수페(soopeh)에서 가져오기 — 선생님이 이 컴퓨터에 저장해 둔 soopeh-export.json 파일을 골라 가져옵니다.
    학생 이름으로 짝을 맞추고, 상점·직업·증권·퀘스트·은행 설정과 학생별 잔액·예금·주식·아이템·직업·신용 등급·아바타를 옮깁니다.
    여러 번 가져와도 같은 이름의 상품·직업·증권·퀘스트는 새로 만들지 않고 고칩니다. (잔액은 파일 값으로 맞춰짐)
+   다시 가져오면 수페에서 다 쓴 아이템은 지우고, 파일에 공동구매 모인 돈(raised·contrib)이 있으면 그것도 맞춥니다.
    파일은 서버나 GitHub에 올라가지 않고, 이 브라우저에서만 읽습니다. */
 (function () {
   const A = window.App, E = window.Econ, TC = window.Teacher;
@@ -182,6 +183,9 @@
 
       // 2) 학생마다 (계좌 기록은 학생마다 한 줄이라 한 명씩 저장)
       const accts = (await B.get('acct')) || {};
+      const again = !!E.cfg().imported;
+      // 수페 상점 상품 — 수페에서 다 쓴 아이템은 파일에 없으므로 다시 가져올 때 지움
+      const soopehItems = new Set(data.items.map((it) => itemId[norm(it.name)]));
       let n = 0;
       for (const s of pairs) {
         const u = map[s.no];
@@ -190,15 +194,22 @@
         const upd = {};
         if (o.money) {
           const cur = a.cash;
-          if (cur === undefined || cur === null || cur !== s.cash) E.addOp(upd, u, { k: 'imp', a: s.cash - (cur || 0), m: '수페에서 가져온 잔액' });
+          if (cur === undefined || cur === null || cur !== s.cash) E.addOp(upd, u, { k: 'imp', a: s.cash - (cur || 0), m: again ? '수페 잔액으로 다시 맞춤' : '수페에서 가져온 잔액' });
           upd[`acct/${u}/dep`] = null;
           s.deposits.forEach((d, i) => {
             const st = Date.parse(d.start), mt = Date.parse(d.maturity);
             upd[`acct/${u}/dep/imp${i + 1}`] = { p: d.principal, r: d.rate, i: Math.floor((d.principal * d.rate) / 100), s: st, dd: Math.max(1, Math.round((mt - st) / E.DAY)) };
           });
           upd[`acct/${u}/hold`] = null;
-          for (const h of s.holdings) upd[`acct/${u}/hold/${stockId[norm(h.stock)]}`] = { q: h.qty, c: h.invested };
-          for (const it of s.items) upd[`acct/${u}/items/${itemId[norm(it.item)]}`] = it.qty;
+          for (const h of s.holdings) { const sid = stockId[norm(h.stock)]; if (sid) upd[`acct/${u}/hold/${sid}`] = { q: h.qty, c: h.invested }; }
+          const has = new Set();
+          for (const it of s.items) {
+            const iid = itemId[norm(it.item)];
+            if (!iid) continue; // 수페 상점 목록에 없는 아이템은 건너뜀
+            has.add(iid);
+            upd[`acct/${u}/items/${iid}`] = it.qty;
+          }
+          for (const iid of Object.keys(a.items || {})) if (soopehItems.has(iid) && !has.has(iid)) upd[`acct/${u}/items/${iid}`] = null;
         }
         if (o.grade && s.grade) upd[`acct/${u}/grade`] = s.grade;
         if (o.av && s.avatar) {
@@ -211,6 +222,20 @@
         const clear = {};
         for (const k of Object.keys(upd)) if (upd[k] === null) { clear[k] = null; delete upd[k]; }
         if (Object.keys(clear).length) await B.update('', clear);
+        if (Object.keys(upd).length) await B.update('', upd);
+      }
+      // 3) 공동구매에 모인 돈: 파일에 있으면(raised·contrib) 합계와 학생별로 보탠 돈을 수페 값으로
+      const groups = data.items.filter((it) => it.group && typeof it.raised === 'number');
+      if (o.money && groups.length) {
+        const upd = {};
+        for (const it of groups) {
+          const id = itemId[norm(it.name)];
+          if (!o.cfg && !(store0 && store0[id])) continue;
+          const con = {};
+          for (const s of pairs) for (const c of s.contrib || []) if (norm(c.item) === norm(it.name) && c.amount > 0) con[map[s.no]] = c.amount;
+          upd[`store/items/${id}/r`] = it.raised;
+          upd[`store/contrib/${id}`] = Object.keys(con).length ? con : null;
+        }
         if (Object.keys(upd).length) await B.update('', upd);
       }
       await B.set('config/econ/imported', { at: B.ts(), n: pairs.length, file: fileName.slice(0, 60) });
