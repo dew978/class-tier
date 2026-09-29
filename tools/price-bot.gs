@@ -68,11 +68,19 @@ function getJson(url) {
 }
 function num(s) { return Number(String(s == null ? '' : s).replace(/,/g, '')); }
 
+// 정규장 시간 (한국 시간 평일 09:00~15:30)
+function regular() {
+  const k = new Date(Date.now() + 9 * 3600e3);
+  const day = k.getUTCDay(), min = k.getUTCHours() * 60 + k.getUTCMinutes();
+  return day >= 1 && day <= 5 && min >= 540 && min <= 930;
+}
 function naver(code) {
   const j = getJson('https://m.stock.naver.com/api/stock/' + code + '/basic');
   const p = num(j.closePrice);
   if (!(p > 0)) throw new Error('가격 없음');
-  return { p: p, ch: num(j.fluctuationsRatio) || 0, open: j.marketStatus === 'OPEN' };
+  // 장 상태가 OPEN 이거나, 정규장 시간에 15분 안에 체결이 있었으면 열린 것으로 봄 (휴장일에는 체결이 없음)
+  const recent = Date.now() - Date.parse(j.localTradedAt || 0) < 15 * 60000;
+  return { p: p, ch: num(j.fluctuationsRatio) || 0, open: j.marketStatus === 'OPEN' || (regular() && recent) };
 }
 function yahoo(sym) {
   const j = getJson('https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?range=1d&interval=5m');

@@ -146,12 +146,13 @@
 - 학생은 **자기 계좌와 기록만** 볼 수 있습니다. 가격·직업·급여·신용 등급은 선생님만 바꿉니다.
 - 데모 모드도 `database.rules.json`을 그대로 해석해 같은 규칙으로 검사합니다.
 
-### 실제 주식 시세 (5~10분 간격)
-GitHub Actions 예약 작업이 평일 장중에는 5분마다, 그 밖에는 1시간마다 네이버 증권·야후 파이낸스에서 시세를 받아 `prices` 브랜치의 `prices.json`에 올립니다(비밀 키 없음). **선생님 화면이 켜져 있는 동안** 그 시세를 Firebase에 저장하고, 시세가 30분 넘게 오래되면 실제 주식 거래는 잠시 멈춥니다. 실제 주식은 평일 장중(기본 09:00~15:30)에만, 학급 증권은 설정한 시간에 거래합니다.
+### 실제 주식 시세 (평일 장중 1분마다)
+**시세 봇**(`tools/price-bot.gs`, 선생님 Google 계정의 Apps Script 「클래스 티어 시세 봇」)이 평일 08:55~15:40에 1분마다 네이버 증권(안 되면 야후)에서 시세를 받아 **Firebase에 바로 저장**합니다. 선생님 화면을 꺼 두어도 학생 화면의 가격이 바뀌어요. 장이 열려 있을 때만 시세 시각을 새로 쓰므로, 휴장일이나 시세가 30분 넘게 오래되면 실제 주식 거래는 잠시 멈춥니다. 실제 주식은 평일 장중(기본 09:00~15:30)에만, 학급 증권은 설정한 시간에 거래합니다.
 
-- 예약 작업: `.github/workflows/prices.yml` (저장소 **Actions → 주식 시세**). 「Run workflow」에 `KRX:005930,US:AAPL`처럼 종목을 적어 손으로 시험할 수 있어요.
-- 받을 종목은 선생님 화면이 「재테크」의 실제 주식 목록을 보고 자동으로 정해요 (Firebase 공개 경로 `pub/symbols`, 종목 번호만).
-- ※ GitHub는 60일 동안 저장소에 변화가 없으면 예약 작업을 멈출 수 있어요. 시세가 멈추면 Actions 탭에서 「주식 시세」를 다시 켜 주세요.
+- 봇 설치(한 번): script.google.com 새 프로젝트 → `tools/price-bot.gs`를 Code.gs에, `tools/price-bot.appsscript.json`을 appsscript.json에 넣기 → `setup` 실행 → 권한 허용. **Firebase 프로젝트를 만든 Google 계정**이어야 해요. 멈추려면 `stop` 실행.
+- 봇 상태는 선생님 「재테크」 화면 아래에 보여요 (마지막 저장 시각, 못 받은 종목).
+- 보조: GitHub Actions(`.github/workflows/prices.yml`)도 시세를 `prices` 브랜치에 올리고, 봇이 5분 넘게 조용하면 **선생님 화면이 켜져 있는 동안** 그 시세를 씁니다. 다만 GitHub 예약 실행은 몇 시간씩 밀리는 일이 많아요(2026-09 기준 3시간에 한 번꼴).
+- 받을 종목은 「재테크」의 실제 주식 목록을 그대로 따라요 (GitHub용 공개 목록 `pub/symbols`, 종목 번호만).
 
 ### 아바타 상점
 학생 「상점 → 🙂 아바타 상점」에서 모양(엄지·이모지·큰 웃음·로봇·픽셀 등)마다 **날마다 바뀌는 얼굴 후보**를 보고 돈으로 삽니다. 산 아바타는 「내 아바타」에 모이고 언제든 바꿔 쓸 수 있어요(기본 아바타 포함). 모양별 가격·판매 여부·후보 수는 「경제 설정 → 아바타 상점」에서 정합니다. 가격은 보안 규칙이 선생님 설정과 맞는지 확인합니다. (그림: DiceBear)
@@ -212,7 +213,7 @@ js/econ.js              학급 경제 공용 로직 (거래 만들기·자산 �
 js/econ-student.js      학생 경제 화면 (지갑·상점·은행·주식·직업)
 js/econ-teacher.js      선생님 경제 화면 (학급 홈·상점·직업·급여·재테크·기록·통계·설정)
 js/importer.js          수페에서 가져오기
-js/prices.js            실제 주식 시세를 Firebase에 반영 (선생님 화면)
+js/prices.js            시세 봇 상태 보기 · 봇이 멈췄을 때 GitHub 시세를 Firebase에 반영 (선생님 화면)
 js/quest.js             퀘스트 (학생 완료 요청 · 선생님 확인·관리)
 js/board.js             판 (자유 판 · 글쓰기 판)
 js/media.js             사진 줄이기
@@ -222,8 +223,9 @@ js/firebase-config.js   ← Firebase 설정값
 database.rules.json     ← Firebase 보안 규칙 (tools/build-rules.ps1로 생성)
 tools/rules.template.json, tools/rules.fragments.txt   보안 규칙 원본 (읽기 쉬운 조각)
 tools/build-rules.ps1   보안 규칙 만들기
-tools/prices.mjs        시세 받기 (GitHub Actions에서 실행)
-.github/workflows/prices.yml   시세 예약 작업 (5~10분마다)
+tools/price-bot.gs, tools/price-bot.appsscript.json   시세 봇 (Google Apps Script, 1분마다)
+tools/prices.mjs        시세 받기 (GitHub Actions에서 실행, 보조)
+.github/workflows/prices.yml   시세 예약 작업 (보조 — GitHub 예약은 자주 밀림)
 ```
 
 보안 규칙을 고칠 때는 `tools/rules.fragments.txt`·`tools/rules.template.json`을 고친 뒤
