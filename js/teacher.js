@@ -842,7 +842,32 @@
         <div class="panel"><h3>여러 명 한꺼번에</h3><p class="note" style="margin-top:0">한 줄에 <b>아이디,이름,비밀번호</b> — 비밀번호를 비우면 6자리 숫자가 자동으로 만들어져요.</p>
           <textarea id="sm-bulk" rows="5" placeholder="kim01,김민준&#10;lee02,이서연,123456"></textarea>
           <div class="foot"><button class="btn primary" id="sm-bulk-go">일괄 등록</button></div></div>
-      </div><div class="tbl-wrap" id="sm-table"></div>`;
+      </div>
+      <div class="panel" style="margin-bottom:16px"><h3>📄 엑셀로 아이디·비밀번호 바꾸기</h3>
+        <p class="note" style="margin-top:0">첫 줄이 <b>학생 이름 · 아이디 · 비밀번호</b>인 엑셀 파일을 고르거나, 엑셀에서 표를 복사해 아래 칸에 붙여 넣으세요. 이름이 같은 학생의 아이디와 비밀번호를 바꿔요. 파일은 이 브라우저에서만 읽고 어디에도 올리지 않아요.</p>
+        <div class="form-grid"><label>엑셀 파일 (.xlsx)<input type="file" id="sm-xl" accept=".xlsx"></label>
+          <label>또는 붙여 넣기<textarea id="sm-xl-paste" rows="2" placeholder="학생 이름	아이디	비밀번호"></textarea></label></div>
+        <div id="sm-xl-prev"></div></div>
+      <div class="tbl-wrap" id="sm-table"></div>`;
+    $('#sm-xl').onchange = async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      try { xlPlan(await window.XlsxLite.read(await f.arrayBuffer())); }
+      catch (err) { toast(err.message || '파일을 읽지 못했어요.', 'bad'); }
+      e.target.value = '';
+    };
+    $('#sm-xl-paste').oninput = (e) => {
+      const rows = e.target.value.split(/\r?\n/).filter((l) => l.trim()).map((l) => l.split(/\t|,/));
+      if (rows.length) xlPlan(rows);
+    };
+    $('#sm-xl-prev').onclick = async (e) => {
+      const b = e.target.closest('[data-x]');
+      if (!b || !xl) return;
+      if (b.dataset.x === 'cancel') { xl = null; $('#sm-xl-prev').innerHTML = ''; $('#sm-xl-paste').value = ''; }
+      if (b.dataset.x === 'recheck') checkIdChange();
+      if (b.dataset.x === 'go') runXl();
+    };
+    $('#sm-xl-prev').onchange = (e) => { if (e.target.id === 'sm-xl-must' && xl) xl.must = e.target.checked; };
     $('#sm-add').onsubmit = async (e) => {
       e.preventDefault();
       const f = e.target;
@@ -876,6 +901,112 @@
         <td><div class="row-actions"><button class="btn xs" data-s="name" data-u="${u}">이름 변경</button><button class="btn xs" data-s="pw" data-u="${u}">비밀번호 변경</button><button class="btn xs danger" data-s="del" data-u="${u}">삭제</button></div></td></tr>`).join('')}
       </tbody></table>` : '<p class="empty" style="padding:30px">아직 학생이 없어요.</p>';
   };
+  /* ── 엑셀로 아이디·비밀번호 바꾸기 ── */
+  let xl = null; // { items: [{ u, name, oldId, newId, pw, err, done, fail }], must, check, busy }
+  const normName = (s) => String(s || '').replace(/\s+/g, '');
+  function xlPlan(rows) {
+    rows = rows.map((r) => r.map((x) => String(x == null ? '' : x).trim()));
+    const hi = rows.findIndex((r) => r.some((x) => /이름/.test(x)) && r.some((x) => /아이디/.test(x)));
+    let cn = 0, ci = 1, cp = 2;
+    if (hi >= 0) {
+      const h = rows[hi];
+      cn = h.findIndex((x) => /이름/.test(x)); ci = h.findIndex((x) => /아이디/.test(x)); cp = h.findIndex((x) => /비밀번호|비번/.test(x));
+    }
+    const byName = {};
+    for (const [u, x] of Object.entries(S.users)) byName[normName(x.name)] = u;
+    const items = rows.slice(hi + 1).filter((r) => r[cn]).map((r) => {
+      const name = r[cn], u = byName[normName(name)];
+      const it = { u, name, oldId: u ? S.users[u].loginId : '', newId: String(r[ci] || '').toLowerCase(), pw: cp >= 0 ? String(r[cp] || '') : '', err: '' };
+      if (!u) it.err = '클래스 티어에 없는 이름';
+      else if (!/^[a-z0-9_]{2,20}$/.test(it.newId)) it.err = '아이디는 영문·숫자·_ 2~20자';
+      else if (it.newId === 'teacher') it.err = 'teacher는 선생님 전용 아이디';
+      else if (it.pw && it.pw.length < 6) it.err = '비밀번호는 6자 이상';
+      else if (!secrets[u] || !secrets[u].pw) it.err = '저장된 지금 비밀번호가 없어 바꿀 수 없음';
+      return it;
+    });
+    // 새 아이디가 겹치거나, 이번에 바뀌지 않는 다른 학생이 쓰고 있는 아이디면 막음
+    for (let pass = 0; pass < 5; pass++) {
+      const moving = new Set(items.filter((x) => !x.err).map((x) => x.u));
+      let changed = false;
+      for (const it of items) {
+        if (it.err) continue;
+        const owner = Object.keys(S.users).find((u) => S.users[u].loginId === it.newId);
+        if (items.filter((x) => !x.err && x.newId === it.newId).length > 1) it.err = '새 아이디가 겹쳐요';
+        else if (items.filter((x) => x.u === it.u).length > 1) it.err = '같은 학생이 두 번 있어요';
+        else if (owner && owner !== it.u && !moving.has(owner)) it.err = `${nameOf(owner)} 학생이 쓰는 아이디`;
+        if (it.err) changed = true;
+      }
+      if (!changed) break;
+    }
+    xl = { items, must: true, check: null, busy: false };
+    checkIdChange();
+  }
+  // 아이디가 바뀌는 학생이 있으면 Firebase가 아이디(이메일) 바꾸기를 허락하는지 먼저 확인
+  async function checkIdChange() {
+    if (!xl) return;
+    const any = xl.items.find((x) => !x.err && x.newId !== x.oldId);
+    xl.check = any ? null : true;
+    drawXl();
+    if (any) { xl.check = await B.canChangeIds(any.oldId); drawXl(); }
+  }
+  function drawXl() {
+    const el = $('#sm-xl-prev');
+    if (!el || !xl) return;
+    const ok = xl.items.filter((x) => !x.err && !x.done);
+    const blocked = xl.check === false && ok.some((x) => x.newId !== x.oldId);
+    const ready = ok.length && xl.check === true && !xl.busy;
+    el.innerHTML = `<div class="tbl-wrap" style="margin-top:10px"><table class="tbl"><thead><tr><th>이름</th><th>지금 아이디</th><th>새 아이디</th><th>새 비밀번호</th><th>상태</th></tr></thead><tbody>
+      ${xl.items.map((x) => `<tr class="${x.err ? 'off' : ''}"><td>${esc(x.name)}</td><td>${esc(x.oldId || '-')}</td>
+        <td><b>${esc(x.newId)}</b>${x.oldId && x.newId !== x.oldId ? ' <span class="pill warn">바뀜</span>' : ''}</td>
+        <td>${x.pw ? `${'●'.repeat(Math.min(x.pw.length, 12))} <span class="muted">(${x.pw.length}자)</span>` : '<span class="muted">그대로</span>'}</td>
+        <td>${x.err ? `<span class="down-txt">${esc(x.err)}</span>` : x.done ? '<span class="pill good">바꿈</span>' : x.fail ? `<span class="down-txt">${esc(x.fail)}</span>` : '준비됨'}</td></tr>`).join('')}
+      </tbody></table></div>
+      ${blocked ? `<div class="banner warn-banner" style="margin-top:12px">⚠️ 아이디를 바꾸려면 Firebase에서 <b>「이메일 열거 보호」</b>를 먼저 꺼야 해요.
+        <a href="https://console.firebase.google.com/project/class-tier/authentication/settings" target="_blank" rel="noopener">Firebase 콘솔 → Authentication → 설정 → 사용자 작업</a>에서 「이메일 열거 보호(권장)」 체크를 풀고 저장한 뒤
+        <button class="btn xs" data-x="recheck">다시 확인</button></div>` : ''}
+      <label class="chk-line"><input type="checkbox" class="chk" id="sm-xl-must" ${xl.must ? 'checked' : ''}> 첫 로그인 때 학생이 비밀번호를 직접 새로 정하게 하기</label>
+      <div class="foot"><span class="muted" id="sm-xl-prog" style="margin-right:auto">${xl.check === null ? '확인 중…' : ''}</span><button class="btn ghost" data-x="cancel">닫기</button>
+        <button class="btn primary" data-x="go" ${ready ? '' : 'disabled'}>${ok.length}명 바꾸기</button></div>`;
+  }
+  async function runXl() {
+    const plan = xl.items.filter((x) => !x.err && !x.done);
+    if (!plan.length) return;
+    const idCh = plan.filter((x) => x.newId !== x.oldId).length;
+    if (!(await confirmBox('아이디·비밀번호 바꾸기', `${plan.length}명의 ${idCh ? `아이디(${idCh}명)와 ` : ''}비밀번호를 바꿀까요?${xl.must ? '<br>학생들은 첫 로그인 때 비밀번호를 직접 새로 정해요.' : ''}`, '바꾸기'))) return;
+    xl.busy = true;
+    const owner = {}, idOf = {}, pwOf = {};
+    for (const [u, x] of Object.entries(S.users)) owner[x.loginId] = u;
+    for (const x of plan) { idOf[x.u] = S.users[x.u].loginId; pwOf[x.u] = secrets[x.u].pw; x.fail = ''; }
+    const pending = plan.slice();
+    let n = 0;
+    for (let guard = 0; pending.length && guard < 400; guard++) {
+      // 새 아이디가 비어 있는 학생부터 → 한 칸씩 밀릴 때는 큰 번호부터 저절로 순서가 맞음
+      let i = pending.findIndex((x) => !owner[x.newId] || owner[x.newId] === x.u);
+      const tmp = i < 0; // 서로 아이디를 맞바꾸는 경우: 한 명을 잠깐 임시 아이디로
+      if (tmp) i = 0;
+      const x = pending[i];
+      const target = tmp ? `tmp_${Math.random().toString(36).slice(2, 8)}` : x.newId;
+      xl.busy = true; drawXl();
+      const pg = $('#sm-xl-prog'); if (pg) pg.textContent = `${n + 1}/${plan.length} ${x.name}…`;
+      try {
+        const r = await B.changeLogin(idOf[x.u], pwOf[x.u], target, tmp ? null : x.pw || null);
+        const pw = r.pwChanged ? x.pw : pwOf[x.u];
+        const upd = { [`users/${x.u}/loginId`]: target, [`secrets/${x.u}`]: { loginId: target, pw } };
+        if (!tmp && xl.must) upd[`users/${x.u}/pwc`] = true;
+        await B.update('', upd);
+        delete owner[idOf[x.u]]; owner[target] = x.u; idOf[x.u] = target; pwOf[x.u] = pw;
+        if (!tmp) { pending.splice(i, 1); n++; if (r.error) x.fail = `아이디는 바꿨지만 비밀번호는 못 바꿈: ${r.error}`; else x.done = true; }
+      } catch (err) {
+        pending.splice(i, 1); n++;
+        x.fail = err.message;
+        if (/열거 보호/.test(err.message)) { xl.check = false; for (const p of pending) p.fail = ''; break; }
+      }
+    }
+    xl.busy = false;
+    drawXl();
+    const done = plan.filter((x) => x.done).length, fails = plan.filter((x) => x.fail).length;
+    toast(`${done}명 바꿨어요${fails ? ` · 못 바꾼 학생 ${fails}명` : ''}`, fails ? 'bad' : 'good');
+  }
   async function addStudent(id, name, pw) {
     id = String(id || '').toLowerCase();
     if (!/^[a-z0-9_]{2,20}$/.test(id)) throw new Error('아이디는 영문·숫자·_ 2~20자');

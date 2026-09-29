@@ -25,12 +25,21 @@
     "users": {
       ".read": "{{TM}}",
       "$uid": {
-        ".write": "{{T}}"
+        ".write": "{{T}}",
+        "pwc": {
+          ".write": "auth != null && auth.uid === $uid && !newData.exists()"
+        }
       }
     },
     "secrets": {
       ".read": "{{T}}",
-      ".write": "{{T}}"
+      ".write": "{{T}}",
+      "$uid": {
+        "pw": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isString() && newData.val().length >= 6 && newData.val().length <= 100"
+        }
+      }
     },
     "activities": {
       ".read": "{{T}}",

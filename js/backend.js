@@ -338,6 +338,29 @@
         a[id].pw = newPw;
         saveAuth(a);
       },
+      async changeLogin(oldId, oldPw, newId, newPw) {
+        const a = loadAuth();
+        const o = String(oldId).toLowerCase(), n = String(newId).toLowerCase();
+        if (!a[o] || a[o].pw !== oldPw) throw new Error('아이디 또는 비밀번호가 올바르지 않습니다.');
+        if (n !== o && a[n]) throw new Error('이미 있는 아이디입니다.');
+        if (newPw && String(newPw).length < 6) throw new Error('비밀번호는 6자 이상이어야 합니다.');
+        const rec = a[o];
+        delete a[o];
+        const pwChanged = !!newPw && newPw !== rec.pw;
+        if (newPw) rec.pw = newPw;
+        a[n] = rec;
+        saveAuth(a);
+        return { idChanged: n !== o, pwChanged };
+      },
+      async changeOwnPassword(newPw) {
+        const a = loadAuth();
+        const k = Object.keys(a).find((id) => a[id].uid === uid);
+        if (!k) throw new Error('계정을 찾을 수 없습니다.');
+        if (String(newPw).length < 6) throw new Error('비밀번호는 6자 이상이어야 합니다.');
+        a[k].pw = newPw;
+        saveAuth(a);
+      },
+      async canChangeIds() { return true; },
       async deleteAccount(loginId) {
         const a = loadAuth();
         delete a[String(loginId).toLowerCase()];
@@ -486,6 +509,35 @@
           await c.user.updatePassword(newPw);
           await second.auth().signOut();
         } catch (e) { throw koErr(e); }
+      },
+      // 학생 아이디(= 로그인 이메일)와 비밀번호 바꾸기 — 보조 앱에서 그 학생으로 로그인해 바꿈
+      // 아이디를 먼저 바꾸고 비밀번호를 바꿈. 비밀번호만 실패하면 { idChanged: true, pwChanged: false, error } 로 알려 줌
+      async changeLogin(oldId, oldPw, newId, newPw) {
+        const sameId = String(newId).toLowerCase() === String(oldId).toLowerCase();
+        let c;
+        try { c = await second.auth().signInWithEmailAndPassword(toEmail(oldId), oldPw); } catch (e) { throw koErr(e); }
+        try {
+          if (!sameId) {
+            try { await c.user.updateEmail(toEmail(newId)); }
+            catch (e) {
+              if (/operation-not-allowed/.test(e && e.code)) throw new Error('Firebase의 「이메일 열거 보호」가 켜져 있어 아이디를 바꿀 수 없어요.');
+              throw koErr(e);
+            }
+          }
+          if (newPw && newPw !== oldPw) {
+            try { await c.user.updatePassword(newPw); }
+            catch (e) { return { idChanged: !sameId, pwChanged: false, error: koErr(e).message }; }
+          }
+          return { idChanged: !sameId, pwChanged: !!newPw && newPw !== oldPw };
+        } finally { await second.auth().signOut().catch(() => {}); }
+      },
+      // 로그인한 사람이 자기 비밀번호 바꾸기 (첫 로그인 때 학생이 직접)
+      async changeOwnPassword(newPw) {
+        try { await auth.currentUser.updatePassword(newPw); } catch (e) { throw koErr(e); }
+      },
+      // 아이디를 바꿀 수 있는지: Firebase 「이메일 열거 보호」가 켜져 있으면 있는 아이디도 안 보여 줌 → 바꿀 수 없음
+      async canChangeIds(knownId) {
+        try { return (await auth.fetchSignInMethodsForEmail(toEmail(knownId))).length > 0; } catch (e) { return false; }
       },
       async deleteAccount(loginId, pw) {
         try {

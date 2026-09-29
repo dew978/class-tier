@@ -137,11 +137,14 @@
     });
   }
 
+  // 방금 로그인할 때 쓴 비밀번호 (첫 로그인 비밀번호 바꾸기에서 같은 걸 다시 쓰지 않게 비교만 함, 저장 안 함)
+  let loginPw = null, pwcOpen = false;
   $('#login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     $('#login-err').textContent = '';
     const btn = e.target.querySelector('button');
     btn.disabled = true;
+    loginPw = $('#login-pw').value;
     try { await B.signIn($('#login-id').value.trim().toLowerCase(), $('#login-pw').value); }
     catch (err) { $('#login-err').textContent = err.message; }
     btn.disabled = false;
@@ -226,6 +229,7 @@
       S.users = v || {};
       if (!S.isTeacher && S.uid && !S.users[S.uid]) { toast('계정이 삭제되었습니다.', 'bad'); logout(); return; }
       render();
+      checkPwChange();
     });
     sub('standings', (v) => { S.standings = v || {}; render(); });
     sub('seasons', (v) => { S.seasons = v || {}; render(); });
@@ -251,6 +255,43 @@
       if (window.Teacher) window.Teacher.enter();
     }
   }
+  // 선생님이 정해 준 비밀번호로 처음 들어온 학생은 나만 아는 비밀번호를 새로 정해야 해요 (users/학생/pwc)
+  function checkPwChange() {
+    if (!S.uid || pwcOpen) return;
+    const me = S.users[S.uid];
+    // 바꿀 필요가 없으면 기억해 둔 로그인 비밀번호는 바로 버림
+    if (S.isTeacher || (me && !me.pwc)) { loginPw = null; return; }
+    if (!me) return;
+    pwcOpen = true;
+    const m = modal(`<h3>🔒 나만 아는 비밀번호로 바꿔요</h3>
+      <p class="note" style="margin-top:0">선생님이 알려 준 비밀번호는 처음 한 번만 써요. 새 비밀번호를 정하면 다음부터는 그 비밀번호로 로그인해요.<br>6자 이상 · 잊어버리면 선생님께 말해요.</p>
+      <label>새 비밀번호<input id="npw1" type="password" maxlength="30" autocomplete="new-password"></label>
+      <label>새 비밀번호 한 번 더<input id="npw2" type="password" maxlength="30" autocomplete="new-password"></label>
+      <p class="err" id="npw-err"></p>
+      <div class="foot"><button class="btn ghost" data-act="logout">로그아웃</button><button class="btn primary" data-ok>바꾸기</button></div>`, { dismissable: false });
+    const err = (t) => { m.el.querySelector('#npw-err').textContent = t; };
+    const go = async () => {
+      err('');
+      const a = m.el.querySelector('#npw1').value, b = m.el.querySelector('#npw2').value;
+      if (a.length < 6) return err('6자 이상으로 정해 주세요.');
+      if (a !== b) return err('두 칸의 비밀번호가 서로 달라요.');
+      if (loginPw && a === loginPw) return err('선생님이 알려 준 비밀번호와 다르게 정해 주세요.');
+      const btn = m.el.querySelector('[data-ok]');
+      btn.disabled = true;
+      try {
+        await B.changeOwnPassword(a);
+        // 잊어버렸을 때 선생님이 도와줄 수 있게 선생님 쪽에도 저장하고, 바꾸라는 표시는 지움
+        await B.update('', { [`secrets/${S.uid}/pw`]: a, [`users/${S.uid}/pwc`]: null });
+        loginPw = null;
+        pwcOpen = false;
+        m.close();
+        toast('비밀번호를 바꿨어요! 다음부터 새 비밀번호로 로그인해요.', 'good');
+      } catch (x) { err(x.message); btn.disabled = false; }
+    };
+    m.el.querySelector('[data-ok]').onclick = go;
+    m.el.querySelector('#npw2').onkeydown = (e) => { if (e.key === 'Enter') go(); };
+    setTimeout(() => { const i = m.el.querySelector('#npw1'); if (i) i.focus(); }, 50);
+  }
   // 학생 본인의 월별 세부 점수 구독
   function watchDetail(month) {
     if (!month || S.detailSubs[month]) return;
@@ -261,6 +302,7 @@
     Object.values(S.detailSubs).forEach((u) => u());
     if (window.Teacher) window.Teacher.leave();
     $('#modal-root').innerHTML = '';
+    pwcOpen = false;
     if (window.HanjaStudy) window.HanjaStudy.reset();
     for (const m of ['EconStudent', 'QuestStudent', 'BoardStudent']) if (window[m]) window[m].reset();
     Object.assign(S, {
@@ -268,7 +310,7 @@
       econRaw: null, acct: null, accts: {}, store: {}, storeContrib: {}, jobs: {}, market: {}, gov: null, quests: {}, boards: {}, secTab: {},
     });
   }
-  async function logout() { await B.signOut(); }
+  async function logout() { loginPw = null; await B.signOut(); }
   document.addEventListener('click', (e) => { if (e.target.closest('[data-act="logout"]')) logout(); });
 
   /* ───────────── 학생 화면 ───────────── */

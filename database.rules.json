@@ -25,12 +25,21 @@
     "users": {
       ".read": "(auth != null && (root.child('users/' + auth.uid).exists() || root.child('config/teacher').val() === auth.uid))",
       "$uid": {
-        ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
+        ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+        "pwc": {
+          ".write": "auth != null && auth.uid === $uid && !newData.exists()"
+        }
       }
     },
     "secrets": {
       ".read": "(auth != null && root.child('config/teacher').val() === auth.uid)",
-      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)"
+      ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)",
+      "$uid": {
+        "pw": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isString() && newData.val().length >= 6 && newData.val().length <= 100"
+        }
+      }
     },
     "activities": {
       ".read": "(auth != null && root.child('config/teacher').val() === auth.uid)",
