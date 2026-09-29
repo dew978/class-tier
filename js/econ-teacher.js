@@ -612,7 +612,7 @@
     const now = B.now();
     const stocks = sortBy(S.market);
     const holders = (sid) => Object.entries(S.accts).filter(([u, a]) => S.users[u] && a && a.hold && a.hold[sid] && a.hold[sid].q > 0);
-    $('#bk-stocks').innerHTML = `<h3>📈 증권 <span class="muted">학급 증권은 선생님이 가격을 정하고, 실제 주식은 시세를 따라가요 (5~10분 간격)</span></h3>
+    $('#bk-stocks').innerHTML = `<h3>📈 증권 <span class="muted">학급 증권은 선생님이 가격을 정하고, 실제 주식은 시세를 따라가요 (평일 장중 1분마다)</span></h3>
       ${stocks.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>증권</th><th>종류</th><th class="num">가격</th><th class="num">등락</th><th>시세 시각</th><th class="num">투자자</th><th class="num">투자금 / 평가액</th><th>거래</th><th></th></tr></thead><tbody>
         ${stocks.map(([sid, s]) => { const hs = holders(sid); const cost = hs.reduce((n, [, a]) => n + (a.hold[sid].c || 0), 0); const val = hs.reduce((n, [, a]) => n + Math.floor(a.hold[sid].q * s.p), 0); const ch = Number(s.ch) || 0; const stale = s.ty === 'real' && now - (s.ut || 0) > 30 * 60000;
           return `<tr class="${s.on === false ? 'off' : ''}"><td><b>${esc(s.n)}</b>${s.d ? `<div class="muted f-sub">${esc(s.d)}</div>` : ''}</td><td>${s.ty === 'real' ? `<span class="pill warn">${esc(s.mk || 'KRX')} ${esc(s.sym || '')}</span>` : '<span class="pill">학급 증권</span>'}</td>
@@ -621,8 +621,8 @@
             <td><label class="switch"><input type="checkbox" data-son="${esc(sid)}" ${s.on !== false ? 'checked' : ''}><i></i></label></td>
             <td><div class="row-actions">${s.ty === 'real' ? '' : `<button class="btn xs primary" data-b="price" data-id="${esc(sid)}">가격 바꾸기</button>`}<button class="btn xs" data-b="edit" data-id="${esc(sid)}">수정</button><button class="btn xs" data-b="who" data-id="${esc(sid)}">투자자</button><button class="btn xs danger" data-b="del" data-id="${esc(sid)}">삭제</button></div></td></tr>`; }).join('')}
       </tbody></table></div>` : '<p class="empty">아직 증권이 없어요.</p>'}
-      <p class="note">거래 시간: 학급 증권 ${E.hhmm(c.trade.cs)}~${E.hhmm(c.trade.ce)} · 실제 주식 평일 ${E.hhmm(c.trade.rs)}~${E.hhmm(c.trade.re)} · 하루 ${c.trade.max}회 (경제 설정에서 변경). 실제 주식 시세는 선생님 화면이 켜져 있을 때 저장돼요.
-        ${stocks.some(([, s]) => s.ty === 'real') ? `<br>시세: ${S.priceInfo ? (S.priceInfo.ok ? `${fmtTime(S.priceInfo.at)}에 받은 시세${S.priceInfo.err ? ` (못 받은 종목: ${esc(S.priceInfo.err)})` : ''}` : `받지 못했어요 — ${esc(S.priceInfo.msg)}`) : '확인 중…'} <button class="btn xs" data-b="feed">지금 받기</button>` : ''}</p>`;
+      <p class="note">거래 시간: 학급 증권 ${E.hhmm(c.trade.cs)}~${E.hhmm(c.trade.ce)} · 실제 주식 평일 ${E.hhmm(c.trade.rs)}~${E.hhmm(c.trade.re)} · 하루 ${c.trade.max}회 (경제 설정에서 변경).
+        ${stocks.some(([, s]) => s.ty === 'real') ? `<br>${priceStatus()} <button class="btn xs" data-b="feed">지금 받기</button>` : ''}</p>`;
     const ids = stuIds();
     $('#bk-bank').innerHTML = `<h3>🏦 신용 등급·예금 <span class="muted">${E.grades().map((g) => `${g} ${c.bank.rates[g]}%`).join(' · ')} · ${c.bank.days}일 · 기본 등급 ${esc(c.bank.def)}</span></h3>
       <div class="tbl-wrap"><table class="tbl"><thead><tr><th>학생</th><th>신용 등급</th><th class="num">예금</th><th class="num">원금</th><th>만기 도래</th><th class="num">주식 평가</th><th class="num">총 자산</th></tr></thead><tbody>
@@ -631,6 +631,15 @@
           <td class="num">${deps.length}개</td><td class="num">${E.won(w.dep)}</td><td>${due ? `<span class="pill good">${due}개 만기</span>` : '-'}</td><td class="num">${E.won(w.stock)}</td><td class="num"><b>${E.won(w.total)}</b></td></tr>`; }).join('')}
       </tbody></table></div><p class="note">만기가 된 예금은 학생이 「은행」에서 직접 받아요. 「학급 홈 → 🔍 자산 살피기」에서 선생님이 대신 지급할 수도 있어요.</p>`;
   });
+  // 실제 주식 시세가 어디서 오는지: 시세 봇(1분마다, 선생님 화면 없어도 됨) → 없으면 GitHub 시세 파일(선생님 화면이 켜져 있을 때만)
+  function priceStatus() {
+    const pb = S.priceBot;
+    const bot = pb
+      ? `🤖 시세 봇: ${fmtTime(pb.at)}에 ${pb.n}개 종목 저장${pb.err ? ` (못 받은 종목: ${esc(Object.keys(pb.err).join(', '))})` : ''}${window.PriceFeed && window.PriceFeed.botOk() ? ' · 평일 장중 1분마다 저장해요 (선생님 화면을 꺼도 돼요)' : ' · 지금은 쉬는 중 (평일 08:55~15:40에 1분마다 일해요)'}`
+      : '🤖 시세 봇이 아직 없어요 — 지금은 선생님 화면이 켜져 있을 때만 GitHub 시세 파일로 저장해요 (몇 시간 늦을 수 있음)';
+    const gh = S.priceInfo ? (S.priceInfo.ok ? `GitHub 시세 파일: ${fmtTime(S.priceInfo.at)}${S.priceInfo.err ? ` (못 받은 종목: ${esc(S.priceInfo.err)})` : ''}` : `GitHub 시세 파일을 받지 못했어요 — ${esc(S.priceInfo.msg)}`) : 'GitHub 시세 파일 확인 중…';
+    return `${bot}<br>${gh}`;
+  }
   async function onBank(e) {
     const b = e.target.closest('[data-b]');
     if (!b) return;

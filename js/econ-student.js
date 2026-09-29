@@ -299,7 +299,7 @@
       <div class="grid3"><div class="stat"><div class="k">쓸 수 있는 돈</div><div class="v">${E.won(a.cash || 0)}</div></div>
         <div class="stat"><div class="k">주식 평가액</div><div class="v">${E.won(w.stock)}</div></div>
         <div class="stat"><div class="k">평가 손익</div><div class="v ${w.stock - w.cost > 0 ? 'up' : w.stock - w.cost < 0 ? 'down' : ''}">${E.swon(w.stock - w.cost)}</div></div></div>
-      <p class="note">학급 증권은 ${E.hhmm(c.trade.cs)}~${E.hhmm(c.trade.ce)}, 실제 주식은 평일 ${E.hhmm(c.trade.rs)}~${E.hhmm(c.trade.re)}에 거래해요. 실제 주식 시세는 5~10분마다 바뀌어요. 원하는 금액만큼 소수점 주식으로 살 수 있어요.</p></div>
+      <p class="note">학급 증권은 ${E.hhmm(c.trade.cs)}~${E.hhmm(c.trade.ce)}, 실제 주식은 평일 ${E.hhmm(c.trade.rs)}~${E.hhmm(c.trade.re)}에 거래해요. 실제 주식 시세는 장중에 1분마다 바뀌어요. 원하는 금액만큼 소수점 주식으로 살 수 있어요.</p></div>
       <div class="stock-list">${list.map(([sid, s]) => stockCard(sid, s, a)).join('') || '<div class="panel"><p class="empty">아직 증권이 없어요.</p></div>'}</div>`;
   }
   function stockCard(sid, s, a) {
