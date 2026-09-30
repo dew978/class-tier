@@ -389,6 +389,32 @@
     main.innerHTML = fn();
     if (S.tab === 'submit') bindSubmit();
     if (S.tab === 'mine') bindMine();
+    if (S.tab === 'home') checkTierUp();
+  }
+
+  // 티어 승급 장면 (js/tierup.js): 이번 달 티어가 이 기기에서 이번 달에 본 가장 높은 티어보다 오르면 한 번 보여 줌
+  // (이번 달에 처음 볼 때는 기준으로만 저장 → 달이 바뀌어 새로 시작할 때는 나오지 않음, 내려갔다 다시 오른 티어도 다시 안 나옴)
+  const TIER_ORDER = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'champion'];
+  let tierUpOpen = false;
+  function checkTierUp() {
+    if (S.isTeacher || !S.uid || tierUpOpen || pwcOpen || !window.TierUp) return;
+    const m = curMonth();
+    if (!myRow(m)) return;
+    const tid = liveTier(S.uid, m);
+    if (!TIER_ORDER.includes(tid)) return;
+    const key = `ct-tier-best:${S.uid}:${m}`;
+    let best = null;
+    try { best = localStorage.getItem(key); } catch (e) { return; }
+    if (best && TIER_ORDER.indexOf(tid) <= TIER_ORDER.indexOf(best)) return;
+    try { localStorage.setItem(key, tid); } catch (e) { return; }
+    if (!best || !TIER_ORDER.includes(best)) return;
+    tierUpOpen = true;
+    const th = settings().thresholds;
+    window.TierUp.play({
+      from: best, to: tid, fromName: tierName(best), toName: tierName(tid), emblem,
+      kicker: `${T.monthLabel(m)} 시즌 · 티어가 올랐어요!`,
+      sub: tid === 'champion' ? '이번 달 반 1위예요 · 마감 때 확정돼요' : `${th[tid]}점을 넘었어요 · 이번 달 마감 때 확정돼요`,
+    }).then(() => { tierUpOpen = false; });
   }
 
   function stHome() {
