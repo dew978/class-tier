@@ -28,6 +28,10 @@
         ".write": "(auth != null && root.child('config/teacher').val() === auth.uid)",
         "pwc": {
           ".write": "auth != null && auth.uid === $uid && !newData.exists()"
+        },
+        "theme": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.val() === 'light' || newData.val() === 'dark'"
         }
       }
     },

@@ -1,0 +1,53 @@
+/* 화면 테마 — 어두운 화면(기본)과 밝은 화면
+   <html data-theme="light"> 로 바뀜: 반 기본값은 「관리 → 설정 → 화면 테마」, 학생은 위쪽 🌙/☀️ 버튼으로 자기 화면만 */
+:root {
+  color-scheme: dark;
+  --surface2: #10183a; --input: #0f1630; --well: #0e1530; --row: #111a36; --sel: #16224d; --chip: #1b2650; --chip-on: #24346a;
+  --modal: #151e3a; --thead: #131b35; --tab-on: #1f2b55; --ntag-bg: #141c35; --line2: #3a4a7c;
+  --panel: rgba(22, 31, 58, .9); --topbar: rgba(12, 17, 32, .82);
+  --pill-bg: #24305a; --pill-fg: #b9c6ff; --toast-bg: #22305c; --toast-line: #3a4a80;
+  --bad-bg: #3a1b27; --bad-line: #6b2a3b; --good-bg: #143a2e; --good-line: #1f6b50; --warn-bg: #3a2a12;
+  --danger-fg: #ffb3bd; --danger-txt: #ff8a98; --link: #8fb3ff; --text2: #c9d4ff;
+  --switch-off: #2a3458; --switch-knob: #c9d3f0; --note-bg: #2c2140; --note-line: #5b3f8a;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f3f5fa; --bg2: #eef1f7; --card: #ffffff; --card2: #f1f4fa; --line: #d9dfeb; --line2: #b7c2d9;
+  --text: #1c2334; --muted: #5d6882; --text2: #3d4a6b;
+  --good: #15a266; --bad: #e0434f; --warn: #d9860b;
+  --shadow: 0 6px 18px rgba(24, 36, 70, .08);
+  --surface2: #f4f6fb; --input: #ffffff; --well: #e7ebf3; --row: #f4f6fb; --sel: #e6eeff; --chip: #eaeef8; --chip-on: #dbe5ff;
+  --modal: #ffffff; --thead: #f1f4f9; --tab-on: #e4eafb; --ntag-bg: #ffffff;
+  --panel: #ffffff; --topbar: rgba(255, 255, 255, .9);
+  --pill-bg: #e7edff; --pill-fg: #3a4cb0; --toast-bg: #ffffff; --toast-line: #d3dbeb;
+  --bad-bg: #fdecee; --bad-line: #f2b9c1; --good-bg: #e3f6ec; --good-line: #a8dcc2; --warn-bg: #fff2da;
+  --danger-fg: #c32f41; --danger-txt: #cf3346; --link: #3461d6;
+  --switch-off: #cdd5e5; --switch-knob: #ffffff; --note-bg: #f4eeff; --note-line: #d8c8f4;
+  --c-bronze: #b0652e; --c-silver: #7b889f; --c-gold: #c08c00; --c-platinum: #0f998b; --c-diamond: #3f6fe0; --c-champion: #de8200;
+}
+[data-theme="light"] body { background: radial-gradient(1200px 700px at 80% -10%, #dde7ff 0%, transparent 60%), radial-gradient(900px 600px at -10% 110%, #eee4ff 0%, transparent 55%), var(--bg); background-attachment: fixed; }
+[data-theme="light"] .btn.primary, [data-theme="light"] .btn.good { color: #fff; }
+[data-theme="light"] .banner { background: linear-gradient(135deg, #dfe8ff, #ece3ff); }
+[data-theme="light"] .warn-banner { background: linear-gradient(135deg, #fff4dd, #f3edff); border-color: #eed7a4; }
+[data-theme="light"] .demo-note { background: #fff6e0; border-color: #efd9a3; color: #6b4e0c; }
+[data-theme="light"] .fame .card { background: linear-gradient(160deg, #f1ecff, #ffffff); border-color: #ddd2fb; }
+[data-theme="light"] .hj-card { background: linear-gradient(160deg, #f5f7ff, #ffffff); }
+[data-theme="light"] .shop-card.group { background: linear-gradient(160deg, #f1ecff, var(--surface2)); border-color: #ddd2fb; }
+[data-theme="light"] .q-card.done { background: linear-gradient(160deg, #e3f6ec, var(--surface2)); border-color: #a8dcc2; }
+[data-theme="light"] .av { background: linear-gradient(145deg, #e6ebf7, #d3dbee); border-color: #c5cee4; }
+[data-theme="light"] .rows li:nth-child(1) .no { color: #c99700; } [data-theme="light"] .rows li:nth-child(2) .no { color: #7b889f; } [data-theme="light"] .rows li:nth-child(3) .no { color: #b8733c; }
+[data-theme="light"] .t-champion { background: linear-gradient(#fff8ea, #fff8ea) padding-box, linear-gradient(90deg, #ffd24a, #ff8a3d, #ff3d6e, #ffb02e, #ffd24a) border-box; background-size: 100% 100%, 300% 100%; }
+[data-theme="light"] .t-champion .nm { background: linear-gradient(90deg, #a86300, #e08a00, #a86300); -webkit-background-clip: text; background-clip: text; color: transparent; }
+[data-theme="light"] .ntag svg.emb, [data-theme="light"] .hero .emb-big svg { filter: drop-shadow(0 2px 4px rgba(20, 30, 60, .25)); }
+[data-theme="light"] .board-card .bc-tags i { background: rgba(0, 0, 0, .06); }
+/* 글쓰기 판·판 목록 배경: 밝은 화면에서는 옅은 색 */
+[data-theme="light"] .bg-dark { background: linear-gradient(160deg, #eef1f8, #e4e9f4); }
+[data-theme="light"] .bg-blue { background: linear-gradient(160deg, #e3edff, #d6e4ff); }
+[data-theme="light"] .bg-purple { background: linear-gradient(160deg, #eee6ff, #e2d6ff); }
+[data-theme="light"] .bg-green { background: linear-gradient(160deg, #dff5ea, #cfeedd); }
+[data-theme="light"] .bg-orange { background: linear-gradient(160deg, #ffeedd, #ffe2c7); }
+[data-theme="light"] .bg-pink { background: linear-gradient(160deg, #ffe6f0, #ffd6e6); }
+
+/* 테마 바꾸기 버튼 (학생 위쪽) */
+.theme-btn { font-size: 1.05em; padding: .35em .6em; }

@@ -15,6 +15,7 @@
     econRaw: null, acct: null, accts: {}, store: {}, storeContrib: {}, jobs: {}, market: {}, gov: null, quests: {}, boards: {},
   };
   const settings = () => T.mergeSettings(S.settingsRaw);
+  const themeSeen = { st: false, us: false }; // 화면 테마를 정할 반 설정·학생 정보가 도착했는지
   const curMonth = () => T.monthKey(B.now());
 
   /* ───────────── 공용 UI ───────────── */
@@ -107,6 +108,8 @@
     const run = () => {
       if (!renderPending) return;
       renderPending = false;
+      // 자유 판만 화면 폭을 다 씀 — 판 화면이 다시 그려질 때 다시 붙음
+      for (const m of document.querySelectorAll('.page.fb-wide')) m.classList.remove('fb-wide');
       if (S.screen === 'student') renderStudent();
       else if (S.screen === 'teacher' && window.Teacher) window.Teacher.render();
     };
@@ -224,10 +227,12 @@
     const sub = (p, f) => S.subs.push(B.on(p, f));
     sub('config/className', (v) => { S.className = v || ''; render(); });
     sub('config/teacherName', (v) => { S.teacherName = v || '선생님'; render(); });
-    sub('config/settings', (v) => { S.settingsRaw = v; render(); });
+    sub('config/settings', (v) => { S.settingsRaw = v; themeSeen.st = true; applyTheme(); render(); });
     sub('users', (v) => {
       S.users = v || {};
       if (!S.isTeacher && S.uid && !S.users[S.uid]) { toast('계정이 삭제되었습니다.', 'bad'); logout(); return; }
+      themeSeen.us = true;
+      applyTheme();
       render();
       checkPwChange();
     });
@@ -303,6 +308,7 @@
     if (window.Teacher) window.Teacher.leave();
     $('#modal-root').innerHTML = '';
     pwcOpen = false;
+    themeSeen.st = themeSeen.us = false;
     if (window.HanjaStudy) window.HanjaStudy.reset();
     for (const m of ['EconStudent', 'QuestStudent', 'BoardStudent']) if (window[m]) window[m].reset();
     Object.assign(S, {
@@ -311,7 +317,35 @@
     });
   }
   async function logout() { loginPw = null; await B.signOut(); }
-  document.addEventListener('click', (e) => { if (e.target.closest('[data-act="logout"]')) logout(); });
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-act="logout"]')) logout();
+    // 학생: 자기 화면만 밝게/어둡게 (반 기본값과 따로)
+    if (e.target.closest('[data-act="theme"]') && S.uid && !S.isTeacher && S.users[S.uid]) {
+      const next = currentTheme() === 'light' ? 'dark' : 'light';
+      S.users[S.uid] = Object.assign({}, S.users[S.uid], { theme: next });
+      applyTheme();
+      B.set(`users/${S.uid}/theme`, next).catch((err) => toast(err.message, 'bad'));
+    }
+  });
+
+  // 화면 테마: 학생은 자기 설정(users/학생/theme) → 없으면 반 기본값(관리 → 설정), 선생님은 반 기본값
+  function currentTheme() {
+    const me = S.uid && !S.isTeacher ? S.users[S.uid] : null;
+    if (me && (me.theme === 'light' || me.theme === 'dark')) return me.theme;
+    return settings().theme === 'light' ? 'light' : 'dark';
+  }
+  function applyTheme() {
+    if (!S.uid) return;
+    // 반 설정과 (학생이면) 내 정보가 모두 온 뒤에 맞춤 — 그 전에는 이 기기에 남아 있던 테마 그대로 (깜빡임 방지)
+    if (!themeSeen.st || (!S.isTeacher && !themeSeen.us)) return;
+    const t = currentTheme();
+    const root = document.documentElement;
+    if (t === 'light') root.dataset.theme = 'light'; else delete root.dataset.theme;
+    try { localStorage.setItem('ct-theme', t); } catch (e) { /* 저장이 막혀도 화면은 바뀜 */ }
+    const mc = document.querySelector('meta[name="theme-color"]');
+    if (mc) mc.content = t === 'light' ? '#f3f5fa' : '#0c1120';
+    document.querySelectorAll('[data-act="theme"]').forEach((b) => { b.textContent = t === 'light' ? '🌙' : '☀️'; b.title = t === 'light' ? '어두운 화면으로' : '밝은 화면으로'; });
+  }
 
   /* ───────────── 학생 화면 ───────────── */
   // 위쪽 = 영역(티어·경제·퀘스트·판), 아래쪽 = 영역 안의 탭. 세 번째 값 = 선생님이 끌 수 있는 메뉴 이름

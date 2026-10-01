@@ -28,6 +28,10 @@
         ".write": "{{T}}",
         "pwc": {
           ".write": "auth != null && auth.uid === $uid && !newData.exists()"
+        },
+        "theme": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.val() === 'light' || newData.val() === 'dark'"
         }
       }
     },

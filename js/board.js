@@ -1,12 +1,11 @@
 /* 판 — 자유 판(게시판)과 글쓰기 판(주제 글쓰기)
-   자유 판: 모눈·칸·목록 배치, 색, 사진, 반응, 댓글, 선생님 확인 뒤 공개, 잠금, 대상 학생
+   자유 판: 수페처럼 넓은 판과 흰 카드. 모눈·칸·목록 배치, 사진, ❤️ 좋아요, 글 밑 댓글, 선생님 확인 뒤 공개, 잠금, 대상 학생
    글쓰기 판: 선생님이 주제와 기간(일정)을 정하면 학생이 주제마다 한 편씩 쓰고,
              선생님이 「통과」(보상) 또는 「다시 쓰기」(의견)를 줌. 학생별 모아보기. 친구 글 공유(선택) */
 (function () {
   const A = window.App, E = window.Econ, TC = window.Teacher;
   const { S, B, $, esc, toast, modal, confirmBox, fmtDate, fmtTime, nameOf, nameTag } = A;
-  const COLORS = { w: '기본', y: '노랑', p: '분홍', b: '파랑', g: '초록', v: '보라' };
-  const RX = { like: '👍', heart: '❤️', wow: '😮', laugh: '😂', clap: '👏' };
+  let live = null; // 열려 있는 글쓰기 판 창을 데이터가 바뀔 때 다시 그림
   const BGS = { dark: '밤하늘', blue: '파랑', purple: '보라', green: '초록', orange: '주황', pink: '분홍' };
   const LAYS = { grid: '모눈 (자유 배치)', cols: '칸 나누기', list: '목록' };
 
@@ -15,7 +14,6 @@
   let boardsSub = null;
   const imgCache = new Map();
   const isT = () => S.isTeacher;
-  const who = (u) => (u === 'T' ? `${esc(S.teacherName || '선생님')} 👩‍🏫` : esc(S.users[u] ? nameOf(u) : '(나간 학생)'));
   const canSee = (b) => b && (isT() || (b.vis !== false && (!b.to || b.to[S.uid])));
   const stuIds = () => Object.keys(S.users).sort((a, b) => nameOf(a).localeCompare(nameOf(b), 'ko'));
   const targets = (to) => stuIds().filter((u) => !to || to[u]);
@@ -42,7 +40,7 @@
       sub(`bcmt/${bid}`, (v) => (V.cmts = v));
       sub(`brx/${bid}`, (v) => (V.rxs = v));
       if (isT()) sub(`bpend/${bid}`, (v) => (V.pend = v));
-      else if (b.appr) sub(`bpend/${bid}`, (v) => (V.pend = v), { child: 'u', equalTo: S.uid });
+      else sub(`bpend/${bid}`, (v) => (V.pend = v), { child: 'u', equalTo: S.uid }); // 판을 연 뒤에 「확인한 뒤 공개」가 켜져도 내 대기 글이 보이게 늘 들음
     }
     A.render();
     window.scrollTo(0, 0);
@@ -56,13 +54,34 @@
       B.get(p).then((v) => { imgCache.set(p, v || ''); root.querySelectorAll(`img[data-src="${p}"]`).forEach((x) => { if (v) x.src = v; else x.remove(); }); }).catch(() => imgCache.delete(p));
     });
   }
-  let lastHtml = '', lastEl = null;
+  let lastHtml = '', lastEl = null, held = null, pressing = false;
+  const drafts = new Map(); // 쓰다 만 댓글 (다시 그려도 남게)
+  const typing = (main) => { const a = document.activeElement; return !!(a && a.dataset && a.dataset.ci && main.contains(a)); };
+  // 미뤄 둔 그리기: 댓글 칸을 벗어났고, 무언가를 누르는 중이 아닐 때 그림 (누르는 도중에 화면이 바뀌면 그 누름이 사라지므로)
+  function flush() {
+    if (!held || pressing) return;
+    const [main, h, c] = held;
+    if (typing(main)) return;
+    held = null;
+    if (main.querySelector('.board-view.free')) paint(main, h, c); // 그사이 다른 화면으로 갔으면 그리지 않음
+  }
+  document.addEventListener('pointerdown', () => { pressing = true; }, true);
+  for (const ev of ['pointerup', 'pointercancel']) document.addEventListener(ev, () => { pressing = false; setTimeout(flush, 0); }, true);
   function paint(main, html, onclick) {
+    // 댓글을 쓰는 중이면 다시 그리지 않고 기다렸다가, 칸을 벗어나면 그림 (한글 입력이 끊기지 않게)
+    if (typing(main)) { held = [main, html, onclick]; return; }
+    held = null;
     if (html === lastHtml && lastEl && main.contains(lastEl)) return;
+    main.querySelectorAll('[data-ci]').forEach((i) => { if (i.value) drafts.set(i.dataset.ci, i.value); else drafts.delete(i.dataset.ci); });
     lastHtml = html;
     main.innerHTML = html;
     lastEl = main.firstElementChild;
     main.onclick = onclick;
+    main.querySelectorAll('[data-ci]').forEach((i) => { const d = drafts.get(i.dataset.ci); if (d) i.value = d; });
+    // 댓글 칸은 form이라 Enter·「게시」·태블릿 자판의 보내기 키가 모두 submit으로 옴 (한글 조합 중 Enter도 브라우저가 알아서 처리)
+    main.onsubmit = (e) => { const f = e.target.closest('[data-cf]'); if (!f) return; e.preventDefault(); sendCmt(main, f.dataset.cf); };
+    main.onmousedown = (e) => { if (e.target.closest('[data-cf] button')) e.preventDefault(); }; // 「게시」를 눌러도 댓글 칸에서 커서가 빠지지 않게
+    main.onfocusout = () => setTimeout(flush, 0);
     loadImages(main);
   }
 
@@ -71,32 +90,54 @@
     const list = Object.entries(S.boards || {}).filter(([, b]) => canSee(b)).sort((a, b) => (b[1].pin ? 1 : 0) - (a[1].pin ? 1 : 0) || (a[1].ord ?? 999) - (b[1].ord ?? 999) || (b[1].at || 0) - (a[1].at || 0));
     return `<div class="${isT() ? '' : 'panel'}"><div class="a-head"><h2>📌 판</h2><span class="muted">${isT() ? '자유 판(게시판)과 글쓰기 판(주제 글쓰기)을 만들어요' : '친구들과 생각을 나누는 곳'}</span><span class="sp"></span>
       ${isT() ? '<button class="btn" data-bn="free">+ 자유 판</button><button class="btn primary" data-bn="write">+ 글쓰기 판</button>' : ''}</div>
-      ${list.length ? `<div class="board-list">${list.map(([bid, b]) => `<button class="board-card bg-${esc(b.bg || 'dark')}" data-bo="${esc(bid)}">
+      ${list.length ? `<div class="board-list">${list.map(([bid, b]) => `<button class="board-card ${b.ty === 'write' ? 'bg-' : 'fb-prev fbg-'}${esc(b.bg || 'dark')}" data-bo="${esc(bid)}">
         <span class="bc-ic">${b.ty === 'write' ? '✏️' : '📌'}</span><b>${esc(b.t)}</b>${b.d ? `<span class="bc-d">${esc(b.d)}</span>` : ''}
         <span class="bc-tags">${b.ty === 'write' ? '<i>글쓰기 판</i>' : `<i>${esc((LAYS[b.lay] || '모눈').split(' ')[0])}</i>`}${b.pin ? '<i>📌 고정</i>' : ''}${isT() && b.vis === false ? '<i>숨김</i>' : ''}${b.lock ? '<i>🔒 잠김</i>' : ''}${b.appr ? '<i>확인 후 공개</i>' : ''}${b.to ? `<i>대상 ${Object.keys(b.to).length}명</i>` : ''}</span></button>`).join('')}</div>`
         : `<p class="empty">${isT() ? '아직 판이 없어요. 「+ 자유 판」이나 「+ 글쓰기 판」을 눌러 만들어요.' : '아직 열린 판이 없어요.'}</p>`}</div>`;
   }
 
-  /* ───────────── 자유 판 ───────────── */
+  /* ───────────── 자유 판 (수페처럼: 넓은 판 · 흰 카드 · 이름이 잘 보이게 · 시간 없음 · ❤️만 · 댓글은 글 바로 밑에) ───────────── */
+  const F = { menu: null, openCm: new Set() }; // ⋮ 메뉴가 열린 글, 댓글을 모두 펼친 글
+  const avatarOf = (u) => (u === 'T' ? '<span class="av xs t-av">👩‍🏫</span>' : S.users[u] && E ? E.avatar(u, 'xs') : '<span class="av xs"><b>?</b></span>');
+  const nameOnly = (u) => (u === 'T' ? esc(S.teacherName || '선생님') : esc(S.users[u] ? nameOf(u) : '(나간 학생)'));
+  const IC_HEART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
+  const IC_CMT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9.5L5 21.5V18H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>';
   function postCard(pid, p, pending) {
     const b = S.boards[V.bid];
     const mine = p.u === S.uid || (isT() && p.u === 'T');
     const rx = V.rxs[pid] || {};
-    const counts = {};
-    for (const k of Object.values(rx)) counts[k] = (counts[k] || 0) + 1;
-    const cm = Object.keys(V.cmts[pid] || {}).length;
-    return `<div class="bp-card c-${esc(p.clr || 'w')} ${pending ? 'pending' : ''}" data-pid="${esc(pid)}">
-      ${pending ? '<span class="pill warn">선생님 확인 중</span>' : ''}${p.pin ? '<span class="bp-pin">📌</span>' : ''}
-      ${p.ti ? `<b class="bp-ti">${esc(p.ti)}</b>` : ''}${p.tx ? `<div class="bp-tx">${esc(p.tx)}</div>` : ''}
-      ${p.img ? `<img data-src="bimg/${esc(V.bid)}/${esc(pid)}" alt="" class="bp-img">` : ''}
-      <div class="bp-meta"><span>${who(p.u)}</span><span>${fmtTime(p.t)}${p.e ? ' · 고침' : ''}</span></div>
-      ${!pending && (b.rx !== false || b.cmt !== false) ? `<div class="bp-act">${b.rx !== false ? Object.entries(RX).map(([k, ic]) => `<button class="rx ${rx[S.uid] === k ? 'on' : ''}" data-rx="${esc(pid)}|${k}" ${isT() ? 'disabled' : ''}>${ic}${counts[k] ? `<small>${counts[k]}</small>` : ''}</button>`).join('') : ''}
-        ${b.cmt !== false ? `<button class="rx cm" data-cm="${esc(pid)}">💬${cm ? `<small>${cm}</small>` : ''}</button>` : ''}</div>` : ''}
-      ${mine || isT() ? `<div class="bp-tools">${mine ? `<button class="btn xs ghost" data-pe="${esc(pid)}|${pending ? 1 : 0}">고치기</button>` : ''}
-        ${isT() && pending ? `<button class="btn xs good" data-pa="${esc(pid)}">공개</button>` : ''}
-        ${isT() && !pending ? `<button class="btn xs ghost" data-pp="${esc(pid)}">${p.pin ? '고정 풀기' : '📌 고정'}</button>` : ''}
-        <button class="btn xs ghost danger-txt" data-pd="${esc(pid)}|${pending ? 1 : 0}">지우기</button></div>` : ''}</div>`;
+    const hearts = Object.keys(rx).length; // 예전 반응(👍😮😂👏)도 ❤️로 셈
+    const liked = !!rx[S.uid];
+    const cms = Object.entries(V.cmts[pid] || {}).sort((x, y) => (x[1].t || 0) - (y[1].t || 0));
+    const all = F.openCm.has(pid);
+    const shown = all ? cms : cms.slice(-2);
+    return `<article class="fb-card ${pending ? 'pending' : ''}" data-pid="${esc(pid)}">
+      <header class="fb-head">${avatarOf(p.u)}<b class="fb-name">${nameOnly(p.u)}</b>${p.pin ? '<span class="fb-pin" title="맨 앞에 고정">📌</span>' : ''}
+        ${mine || isT() ? `<button class="fb-more" data-mn="${esc(pid)}" aria-label="더 보기">⋮</button>` : ''}
+        ${F.menu === pid ? `<div class="fb-menu">${mine ? `<button data-pe="${esc(pid)}|${pending ? 1 : 0}">고치기</button>` : ''}
+          ${isT() && !pending ? `<button data-pp="${esc(pid)}">${p.pin ? '고정 풀기' : '맨 앞에 고정'}</button>` : ''}
+          <button class="danger-txt" data-pd="${esc(pid)}|${pending ? 1 : 0}">지우기</button></div>` : ''}</header>
+      ${pending ? '<span class="fb-wait">선생님 확인 중</span>' : ''}
+      ${p.ti ? `<h4 class="fb-ti">${esc(p.ti)}</h4>` : ''}${p.tx ? `<div class="fb-tx">${esc(p.tx)}</div>` : ''}
+      ${p.img ? `<img data-src="bimg/${esc(V.bid)}/${esc(pid)}" alt="" class="fb-img">` : ''}
+      ${isT() && pending ? `<button class="btn sm good fb-approve" data-pa="${esc(pid)}">공개하기</button>` : ''}
+      ${!pending && (b.rx !== false || (b.cmt !== false && cms.length)) ? `<div class="fb-act">
+        ${b.rx !== false ? `<button class="fb-heart ${liked ? 'on' : ''}" data-hx="${esc(pid)}" aria-label="좋아요" aria-pressed="${liked}">${IC_HEART}${hearts ? `<span>${hearts}</span>` : ''}</button>` : ''}
+        ${b.cmt !== false && cms.length ? `<span class="fb-cmn">${IC_CMT}${cms.length}</span>` : ''}</div>` : ''}
+      ${!pending && b.cmt !== false ? `<div class="fb-cmts">
+        ${cms.length > 2 ? `<button class="fb-more-cm" data-cmall="${esc(pid)}">${all ? '댓글 접기' : `댓글 ${cms.length - 2}개 더 보기`}</button>` : ''}
+        ${shown.map(([cid, c]) => `<div class="fb-cm">${avatarOf(c.u)}<div class="fb-cm-body"><b>${nameOnly(c.u)}</b><span>${esc(c.tx)}</span></div>
+          ${c.u === S.uid || isT() ? `<button class="fb-cm-x" data-cd="${esc(pid)}|${esc(cid)}" aria-label="댓글 지우기">✕</button>` : ''}</div>`).join('')}
+        <form class="fb-cm-new" data-cf="${esc(pid)}"><input data-ci="${esc(pid)}" maxlength="300" placeholder="댓글 추가..." enterkeyhint="send" autocomplete="off" aria-label="댓글 쓰기"><button type="submit">게시</button></form></div>` : ''}
+    </article>`;
   }
+  // 모눈 배치의 세로 줄 수 (카드 한 장이 270px쯤 되게)
+  let gridN = 0;
+  const gridCols = () => Math.max(1, Math.round((window.innerWidth - 68) / 270));
+  window.addEventListener('resize', () => {
+    const b = V.bid && S.boards[V.bid];
+    if (b && b.ty !== 'write' && b.lay !== 'cols' && b.lay !== 'list' && gridCols() !== gridN) A.render();
+  });
   function sortPosts(entries, b) {
     const dir = b.sort === 'old' ? 1 : -1;
     return entries.sort((x, y) => (y[1].pin ? 1 : 0) - (x[1].pin ? 1 : 0) || dir * ((x[1].t || 0) - (y[1].t || 0)));
@@ -110,18 +151,25 @@
     let body;
     if (b.lay === 'cols') {
       const cols = (b.cols && b.cols.length ? b.cols : ['첫째 칸', '둘째 칸', '셋째 칸']);
-      body = `<div class="bp-cols" style="--n:${cols.length}">${cols.map((c, i) => `<div class="bp-col"><div class="bp-col-h">${esc(c)}</div>
-        ${cards(pend.filter(([, p]) => (p.col || 0) === i), true)}${cards(posts.filter(([, p]) => (p.col || 0) === i || (i === 0 && (p.col || 0) >= cols.length)), false)}</div>`).join('')}</div>`;
-    } else body = `<div class="${b.lay === 'list' ? 'bp-list' : 'bp-grid'}">${cards(pend, true)}${cards(posts, false)}</div>`;
+      body = `<div class="fb-cols" style="--n:${cols.length}">${cols.map((c, i) => `<section class="fb-col"><h3 class="fb-col-h">${esc(c)}</h3>
+        ${cards(pend.filter(([, p]) => (p.col || 0) === i), true)}${cards(posts.filter(([, p]) => (p.col || 0) === i || (i === 0 && (p.col || 0) >= cols.length)), false)}</section>`).join('')}</div>`;
+    } else if (b.lay === 'list') body = `<div class="fb-list">${cards(pend, true)}${cards(posts, false)}</div>`;
+    else {
+      // 모눈: 화면 폭에 맞춘 세로 줄에 글을 왼쪽부터 차례로 담아, 길이가 달라도 빈틈 없이 쌓임
+      gridN = gridCols();
+      const all = [...pend.map(([pid, p]) => postCard(pid, p, true)), ...posts.map(([pid, p]) => postCard(pid, p, false))];
+      body = `<div class="fb-grid" style="--n:${gridN}">${Array.from({ length: gridN }, (_, c) => `<div class="fb-gcol">${all.filter((_, i) => i % gridN === c).join('')}</div>`).join('')}</div>`;
+    }
     const canPost = isT() || b.lock !== true;
-    return `<div class="board-view bg-${esc(b.bg || 'dark')}"><div class="a-head bv-head"><button class="btn sm ghost" data-back="1">← 판 목록</button><h2>${esc(b.t)}</h2>
-        <span class="muted">${b.d ? esc(b.d) : ''}</span><span class="sp"></span>
-        <span class="pill">참여 ${[...writers].filter((u) => tg.includes(u)).length}/${tg.length}</span>
-        ${isT() ? `<button class="btn sm" data-bs="${esc(V.bid)}">⚙️ 판 설정</button>` : ''}
-        ${canPost ? '<button class="btn sm primary" data-pn="1">+ 게시물 붙이기</button>' : '<span class="pill">🔒 선생님이 잠갔어요</span>'}</div>
-      ${!isT() && b.appr ? '<p class="note">이 판은 선생님이 확인한 뒤 친구들에게 보여요.</p>' : ''}
-      ${isT() && pend.length ? `<p class="note">확인을 기다리는 글 ${pend.length}개 — 「공개」를 누르면 학생들에게 보여요.</p>` : ''}
-      ${posts.length || pend.length ? body : '<p class="empty">아직 게시물이 없어요. 첫 글을 붙여 보세요!</p>'}</div>`;
+    return `<div class="board-view free fbg-${esc(b.bg || 'dark')}">
+      <div class="fb-top"><div class="fb-tt"><h2 class="fb-title">${esc(b.t)}</h2>${b.d ? `<span class="fb-desc">${esc(b.d)}</span>` : ''}</div>
+        ${isT() ? `<span class="fb-count">참여 ${[...writers].filter((u) => tg.includes(u)).length}/${tg.length}</span><button class="fb-tbtn" data-bs="${esc(V.bid)}">⚙️ 판 설정</button>` : ''}
+        ${canPost ? '' : '<span class="fb-count">🔒 선생님이 잠갔어요</span>'}
+        <button class="fb-tbtn fb-close" data-back="1" aria-label="판 목록으로" title="판 목록으로">✕</button></div>
+      ${!isT() && b.appr ? '<p class="fb-note">이 판은 선생님이 확인한 뒤 친구들에게 보여요.</p>' : ''}
+      ${isT() && pend.length ? `<p class="fb-note">확인을 기다리는 글 ${pend.length}개 — 「공개하기」를 누르면 학생들에게 보여요.</p>` : ''}
+      ${posts.length || pend.length ? body : '<p class="fb-empty">아직 게시물이 없어요. 첫 글을 붙여 보세요!</p>'}
+      ${canPost ? '<button class="fb-add" data-pn="1">＋ 게시물 붙이기</button>' : ''}</div>`;
   }
   function postDialog(pid, pending) {
     const b = S.boards[V.bid];
@@ -133,12 +181,10 @@
       <label>제목 (선택)<input id="pt" maxlength="60" value="${esc(p.ti || '')}"></label>
       <label>내용<textarea id="px" rows="6" maxlength="2000">${esc(p.tx || '')}</textarea></label>
       ${cols ? `<label>칸<select id="pc">${cols.map((c, i) => `<option value="${i}" ${(p.col || 0) === i ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>` : ''}
-      <div class="chips" id="pclr">${Object.entries(COLORS).map(([k, n]) => `<button data-c="${k}" class="clr-chip c-${k} ${(p.clr || 'w') === k ? 'on' : ''}">${n}</button>`).join('')}</div>
       ${b.img !== false ? `<div class="photo-pick"><div class="row-flex"><button class="btn sm" id="pi">📷 사진 ${p.img ? '바꾸기' : '넣기'}</button>${p.img ? '<button class="btn sm ghost" id="pir">사진 빼기</button>' : ''}</div><div id="piv">${p.img ? `<img data-src="bimg/${esc(V.bid)}/${esc(pid)}" alt="" class="proof-img">` : ''}</div></div>` : ''}
       <div class="foot"><button class="btn ghost" data-close>취소</button><button class="btn primary" data-ok>${pid ? '저장' : '붙이기'}</button></div>`, { wide: true });
     loadImages(m.el);
-    let clr = p.clr || 'w';
-    m.el.querySelector('#pclr').onclick = (e) => { const c = e.target.closest('[data-c]'); if (!c) return; clr = c.dataset.c; m.el.querySelectorAll('#pclr [data-c]').forEach((x) => x.classList.toggle('on', x === c)); };
+    const clr = p.clr || 'w'; // 카드는 모두 흰색 (예전 글의 색 정보는 그대로 둠)
     const pi = m.el.querySelector('#pi');
     if (pi) pi.onclick = async () => {
       const f = await window.Media.pick();
@@ -165,45 +211,48 @@
       catch (err) { e.target.disabled = false; toast(/권한/.test(err.message) ? '지금은 이 판에 쓸 수 없어요.' : err.message, 'bad'); }
     };
   }
-  function commentsDialog(pid) {
+  // 댓글은 글 바로 밑의 칸에서 곧바로 달기
+  async function sendCmt(main, pid) {
     const b = S.boards[V.bid];
-    const m = modal(`<div id="cmv"></div><div class="cm-new"><input id="cmi" maxlength="300" placeholder="댓글을 적어요"><button class="btn primary" id="cms">달기</button></div><div class="foot"><button class="btn" data-close>닫기</button></div>`, { wide: true, onClose: () => { live = null; } });
-    const draw = () => {
-      const p = V.posts[pid];
-      if (!p) { m.close(); return; }
-      const list = Object.entries(V.cmts[pid] || {}).sort((x, y) => (x[1].t || 0) - (y[1].t || 0));
-      m.el.querySelector('#cmv').innerHTML = `<div class="bp-card c-${esc(p.clr || 'w')} flat">${p.ti ? `<b class="bp-ti">${esc(p.ti)}</b>` : ''}${p.tx ? `<div class="bp-tx">${esc(p.tx)}</div>` : ''}<div class="bp-meta"><span>${who(p.u)}</span><span>${fmtTime(p.t)}</span></div></div>
-        <h4>💬 댓글 ${list.length}</h4><ul class="rows cm-list">${list.map(([cid, c]) => `<li><b>${who(c.u)}</b><span class="cm-tx">${esc(c.tx)}</span><span class="right muted" style="font-size:.8em">${fmtTime(c.t)}${c.u === S.uid || isT() ? ` <button class="btn xs ghost" data-cd="${esc(cid)}">지우기</button>` : ''}</span></li>`).join('') || '<li class="empty">첫 댓글을 달아 보세요</li>'}</ul>`;
-    };
-    live = draw;
-    draw();
-    const inp = m.el.querySelector('#cmi');
-    const send = async () => {
-      const tx = inp.value.trim();
-      if (!tx) return;
-      if (b.cmt === false && !isT()) return toast('댓글이 꺼진 판이에요.', 'bad');
-      try { await B.set(`bcmt/${V.bid}/${pid}/${B.newKey()}`, { u: isT() ? 'T' : S.uid, t: B.ts(), tx }); inp.value = ''; }
-      catch (err) { toast(err.message, 'bad'); }
-    };
-    m.el.querySelector('#cms').onclick = send;
-    inp.onkeydown = (e) => { if (e.key === 'Enter' && !e.isComposing) send(); };
-    m.el.querySelector('#cmv').onclick = async (e) => {
-      const d = e.target.closest('[data-cd]');
-      if (d && (await confirmBox('댓글 지우기', '이 댓글을 지울까요?', '지우기', true))) await B.remove(`bcmt/${V.bid}/${pid}/${d.dataset.cd}`).catch((err) => toast(err.message, 'bad'));
-    };
+    const inp = [...main.querySelectorAll('[data-ci]')].find((i) => i.dataset.ci === pid);
+    const tx = inp ? inp.value.trim() : '';
+    if (!tx) return;
+    if (b.cmt === false && !isT()) return toast('댓글이 꺼진 판이에요.', 'bad');
+    // 칸을 먼저 비움 (두 번 눌러도 한 번만 올라가고, 그사이 화면이 다시 그려져도 글이 남지 않게)
+    inp.value = '';
+    drafts.delete(pid);
+    try {
+      await B.set(`bcmt/${V.bid}/${pid}/${B.newKey()}`, { u: isT() ? 'T' : S.uid, t: B.ts(), tx });
+      if (document.activeElement && document.activeElement.dataset.ci === pid) document.activeElement.blur(); // 새 댓글이 바로 보이게 다시 그림
+    } catch (err) {
+      // 올리지 못했으면 쓴 글을 되돌려 놓음
+      const cur = [...main.querySelectorAll('[data-ci]')].find((i) => i.dataset.ci === pid);
+      if (cur && !cur.value) cur.value = tx;
+      drafts.set(pid, tx);
+      toast(/권한/.test(err.message) ? '지금은 댓글을 달 수 없어요.' : err.message, 'bad');
+    }
   }
-  let live = null;
   async function onFree(e) {
     const t = e.target;
-    const rx = t.closest('[data-rx]');
-    if (rx) {
-      const [pid, k] = rx.dataset.rx.split('|');
+    // ⋮ 메뉴: 열기/닫기, 메뉴 밖을 누르면 닫힘
+    const mn = t.closest('[data-mn]');
+    if (mn) { F.menu = F.menu === mn.dataset.mn ? null : mn.dataset.mn; A.render(); return; }
+    if (F.menu) { F.menu = null; A.render(); }
+    const hx = t.closest('[data-hx]');
+    if (hx) {
+      const pid = hx.dataset.hx;
       const cur = (V.rxs[pid] || {})[S.uid];
-      await B.set(`brx/${V.bid}/${pid}/${S.uid}`, cur === k ? null : k).catch((err) => toast(err.message, 'bad'));
+      await B.set(`brx/${V.bid}/${pid}/${S.uid}`, cur ? null : 'heart').catch((err) => toast(err.message, 'bad'));
       return;
     }
-    const cm = t.closest('[data-cm]');
-    if (cm) return commentsDialog(cm.dataset.cm);
+    const all = t.closest('[data-cmall]');
+    if (all) { const pid = all.dataset.cmall; F.openCm.has(pid) ? F.openCm.delete(pid) : F.openCm.add(pid); A.render(); return; }
+    const cd = t.closest('[data-cd]');
+    if (cd) {
+      const [pid, cid] = cd.dataset.cd.split('|');
+      if (await confirmBox('댓글 지우기', '이 댓글을 지울까요?', '지우기', true)) await B.remove(`bcmt/${V.bid}/${pid}/${cid}`).catch((err) => toast(err.message, 'bad'));
+      return;
+    }
     if (t.closest('[data-pn]')) return postDialog(null, false);
     const pe = t.closest('[data-pe]');
     if (pe) { const [pid, pend] = pe.dataset.pe.split('|'); return postDialog(pid, pend === '1'); }
@@ -444,12 +493,12 @@
 
   /* ───────────── 판 설정 (선생님) ───────────── */
   function boardDialog(bid, ty) {
-    const b = bid ? S.boards[bid] : { ty, t: '', lay: 'grid', bg: ty === 'write' ? 'purple' : 'blue', vis: true, img: true, cmt: true, rx: true };
+    const b = bid ? S.boards[bid] : { ty, t: '', lay: 'grid', bg: ty === 'write' ? 'purple' : 'dark', vis: true, img: true, cmt: true, rx: true };
     const write = b.ty === 'write';
     const tgt = new Set(Object.keys(b.to || {}));
     const m = modal(`<h3>${bid ? '판 설정' : write ? '새 글쓰기 판' : '새 자유 판'}</h3>
       <div class="form-grid"><label>이름<input id="bt" maxlength="40" value="${esc(b.t)}" placeholder="${write ? '예: 국어 주제 글쓰기' : '예: 우리 반 아이디어'}"></label>
-        <label>배경<select id="bbg">${Object.entries(BGS).map(([k, n]) => `<option value="${k}" ${(b.bg || 'dark') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label>배경<select id="bbg">${Object.entries(BGS).map(([k, n]) => `<option value="${k}" ${(b.bg || 'dark') === k ? 'selected' : ''}>${k === 'dark' && !write ? '베이지 (기본)' : n}</option>`).join('')}</select></label>
         ${write ? `<label>통과 보상 기본값<input id="brw" type="number" min="0" step="1000" value="${b.rw || ''}" placeholder="0"></label>` : `<label>배치<select id="blay">${Object.entries(LAYS).map(([k, n]) => `<option value="${k}" ${(b.lay || 'grid') === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
           <label>정렬<select id="bsort"><option value="new" ${b.sort !== 'old' ? 'selected' : ''}>새 글이 먼저</option><option value="old" ${b.sort === 'old' ? 'selected' : ''}>오래된 글이 먼저</option></select></label>`}
         <label>순서<input id="bord" type="number" value="${b.ord ?? ''}"></label></div>
@@ -463,7 +512,7 @@
         <label class="chk-line"><input type="checkbox" class="chk" id="bappr" ${b.appr ? 'checked' : ''}> 선생님이 확인한 뒤 공개</label>
         <label class="chk-line"><input type="checkbox" class="chk" id="bimg" ${b.img !== false ? 'checked' : ''}> 사진 허용</label>
         <label class="chk-line"><input type="checkbox" class="chk" id="bcmt" ${b.cmt !== false ? 'checked' : ''}> 댓글</label>
-        <label class="chk-line"><input type="checkbox" class="chk" id="brx" ${b.rx !== false ? 'checked' : ''}> 반응(👍❤️😮😂👏)</label>`}
+        <label class="chk-line"><input type="checkbox" class="chk" id="brx" ${b.rx !== false ? 'checked' : ''}> ❤️ 좋아요</label>`}
       </div>
       <h4>대상 <span class="muted" style="font-weight:400">아무도 고르지 않으면 반 전체</span></h4>
       <div class="stu-grid" id="bto">${stuIds().map((u) => `<button data-tu="${u}" class="${tgt.has(u) ? 'sel' : ''}"><span class="nm">${esc(nameOf(u))}</span></button>`).join('')}</div>
@@ -508,6 +557,8 @@
     ensureBoards();
     if (V.bid && !canSee(S.boards[V.bid])) close();
     const b = V.bid && S.boards[V.bid];
+    // 자유 판은 화면 폭을 다 씀 (수페처럼)
+    main.classList.toggle('fb-wide', !!(b && b.ty !== 'write'));
     if (live) live();
     if (!b) return paint(main, listHtml(), onList);
     if (b.ty === 'write') return paint(main, isT() ? writeHtmlTeacher(b) : writeHtmlStudent(b), (e) => { if (!common(e)) (isT() ? onWriteTeacher : onWriteStudent)(e); });

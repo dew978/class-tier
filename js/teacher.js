@@ -1167,6 +1167,9 @@
           </div><label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" class="chk" id="st-show" ${st.showScores ? 'checked' : ''}> 학생 순위표에 다른 친구의 총점도 보여주기</label>
           <div class="foot"><button class="btn primary" id="st-save">저장</button></div></div>
       </div><div class="col" style="gap:16px">
+        <div class="panel"><h3>🎨 화면 테마</h3>
+          <div class="seg" id="theme-seg"><button data-theme-set="dark" class="${st.theme !== 'light' ? 'on' : ''}">🌙 어두운 화면</button><button data-theme-set="light" class="${st.theme === 'light' ? 'on' : ''}">☀️ 밝은 화면</button></div>
+          <p class="note">반 전체(선생님 화면 포함)의 기본 화면이에요. 학생은 위쪽 ☀️/🌙 버튼으로 자기 화면만 따로 바꿀 수 있어요.</p></div>
         <div class="panel"><h3>반 정보</h3><label>반 이름<input id="ci-class" value="${esc(S.className)}"></label><label>선생님 표시 이름<input id="ci-teacher" value="${esc(S.teacherName)}"></label>
           <div class="foot"><button class="btn" id="ci-save">저장</button></div></div>
         <div class="panel" id="acct-panel"><h3>선생님 계정</h3>
@@ -1212,6 +1215,13 @@
       raw.showScores = $('#st-show').checked;
       await B.set('config/settings', raw);
       toast('저장했어요. 진행 중인 달의 점수가 다시 계산돼요.', 'good');
+    };
+    $('#theme-seg').onclick = async (e) => {
+      const b = e.target.closest('[data-theme-set]');
+      if (!b) return;
+      $$('#theme-seg [data-theme-set]').forEach((x) => x.classList.toggle('on', x === b));
+      await B.set('config/settings/theme', b.dataset.themeSet);
+      toast(b.dataset.themeSet === 'light' ? '밝은 화면을 반 기본으로 정했어요.' : '어두운 화면을 반 기본으로 정했어요.', 'good');
     };
     $('#ci-save').onclick = async () => {
       await B.update('config', { className: $('#ci-class').value.trim(), teacherName: $('#ci-teacher').value.trim() || '선생님' });

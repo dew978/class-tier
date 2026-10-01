@@ -17,6 +17,9 @@
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/tier.css">
   <link rel="stylesheet" href="css/econ.css">
+  <link rel="stylesheet" href="css/theme.css">
+  <!-- 이 기기에서 마지막으로 쓴 화면 테마를 먼저 적용 (깜빡임 방지) — 로그인 뒤 반 설정·학생 설정으로 다시 맞춤 -->
+  <script>try { if (localStorage.getItem('ct-theme') === 'light') document.documentElement.dataset.theme = 'light'; } catch (e) {}</script>
 </head>
 <body>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -91,6 +94,7 @@
       <div class="brand" id="st-brand"></div>
       <nav class="tabs secs" id="st-secs"></nav>
       <div class="top-me" id="st-me"></div>
+      <button class="btn ghost sm theme-btn" data-act="theme" title="밝은 화면으로">☀️</button>
       <button class="btn ghost sm" data-act="logout">로그아웃</button>
     </header>
     <nav class="subtabs" id="st-tabs"></nav>

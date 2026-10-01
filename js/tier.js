@@ -46,6 +46,8 @@
     showScores: true,
     // 1인1역 체크: teacher = 선생님이 날짜별로 체크 / student = 학생이 직업(역할)을 스스로 체크 → 선생님 확인
     svMode: 'teacher',
+    // 반 기본 화면 테마: dark(어두운 화면) / light(밝은 화면) — 학생은 자기 화면만 따로 바꿀 수 있음 (users/학생/theme)
+    theme: 'dark',
     rewards: { champion: '', diamond: '', platinum: '', gold: '', silver: '', bronze: '' },
     // 월 마감 때 티어별로 보내는 보상금 (학급 경제)
     rewardMoney: { champion: 0, diamond: 0, platinum: 0, gold: 0, silver: 0, bronze: 0 },
@@ -67,6 +69,7 @@
     if (raw.rewardMoney) for (const k of Object.keys(s.rewardMoney)) s.rewardMoney[k] = Math.max(0, Math.round(Number(raw.rewardMoney[k]) || 0));
     if (typeof raw.showScores === 'boolean') s.showScores = raw.showScores;
     if (raw.svMode === 'student' || raw.svMode === 'teacher') s.svMode = raw.svMode;
+    if (raw.theme === 'light' || raw.theme === 'dark') s.theme = raw.theme;
     addTrackCats(s, raw);
     return s;
   }
