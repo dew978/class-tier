@@ -322,16 +322,24 @@
     // 학생: 자기 화면만 밝게/어둡게 (반 기본값과 따로)
     if (e.target.closest('[data-act="theme"]') && S.uid && !S.isTeacher && S.users[S.uid]) {
       const next = currentTheme() === 'light' ? 'dark' : 'light';
+      const key = ownThemeKey();
       S.users[S.uid] = Object.assign({}, S.users[S.uid], { theme: next });
       applyTheme();
-      B.set(`users/${S.uid}/theme`, next).catch((err) => toast(err.message, 'bad'));
+      // 계정에 저장 (다른 기기에서도 같게). 저장하지 못하면(인터넷 끊김 등) 이 기기에만 남겨 둠
+      B.set(`users/${S.uid}/theme`, next)
+        .then(() => { try { localStorage.removeItem(key); } catch (err) { /* 무시 */ } })
+        .catch(() => { try { localStorage.setItem(key, next); } catch (err) { /* 무시 */ } applyTheme(); });
     }
   });
 
-  // 화면 테마: 학생은 자기 설정(users/학생/theme) → 없으면 반 기본값(관리 → 설정), 선생님은 반 기본값
+  // 화면 테마: 학생은 자기 설정(users/학생/theme → 없으면 이 기기에 남겨 둔 값) → 없으면 반 기본값(관리 → 설정), 선생님은 반 기본값
+  const ownThemeKey = () => 'ct-theme-own:' + S.uid;
   function currentTheme() {
     const me = S.uid && !S.isTeacher ? S.users[S.uid] : null;
     if (me && (me.theme === 'light' || me.theme === 'dark')) return me.theme;
+    if (me) {
+      try { const own = localStorage.getItem(ownThemeKey()); if (own === 'light' || own === 'dark') return own; } catch (err) { /* 무시 */ }
+    }
     return settings().theme === 'light' ? 'light' : 'dark';
   }
   function applyTheme() {
